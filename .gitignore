@@ -1,3 +1,12 @@
+#pre trained models
+*.h5
+
+#images examples
+*.png
+
+#tensorflow logs
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

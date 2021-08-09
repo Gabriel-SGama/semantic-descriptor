@@ -1,0 +1,8 @@
+--mode train
+--dataset mapillary
+--dataset_images_path /home/gama/Documentos/datasets/mapillary/
+--dataset_labels_path /home/gama/Documentos/datasets/mapillary/
+--num_epochs 1
+--batch_size 1
+--GPU 0
+--metrics_path test_mp_1ep

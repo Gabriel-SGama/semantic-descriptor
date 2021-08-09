@@ -1,0 +1,10 @@
+--mode train
+--dataset mapillary
+--dataset_images_path /media/olorin/Elements/olorin/dataset/mapillary/
+--dataset_labels_path /media/olorin/Elements/olorin/dataset/mapillary/
+--num_epochs 40
+--batch_size 3
+--GPU 0
+--save_model_path mp_pre_train.h5
+--metrics_path mp_pre_train
+

@@ -1,0 +1,12 @@
+--mode train
+--dataset cityscapes
+--dataset_images_path /home/gama/Documentos/datasets/cityscapes/leftImg8bit/
+--dataset_labels_path /home/gama/Documentos/datasets/cityscapes/gtFine/
+--img_width 512
+--img_height 256
+--num_epochs 50
+--batch_size 4
+--GPU 0
+--save_model_path LMM.h5
+--load_model_path resnet50v2.h5
+--metrics_path test_function
