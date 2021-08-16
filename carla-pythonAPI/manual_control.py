@@ -64,8 +64,11 @@ try:
 except ImportError:
 	raise RuntimeError('cannot import numpy, make sure numpy package is installed')
 
-VIEW_WIDTH = 1920//4
-VIEW_HEIGHT = 1080//4
+# VIEW_WIDTH = 1920//4
+# VIEW_HEIGHT = 1080//4
+
+VIEW_WIDTH = 512
+VIEW_HEIGHT = 512
 VIEW_FOV = 90
 
 
@@ -87,42 +90,38 @@ class BasicSynchronousClient(object):
 		self.world = None
 		self.camera = None
 		self.depth_camera = None
+		self.semantic_camera = None
 		self.car = None
 		self.display = None
 		self.depth_display = None
 		self.image = None
 		self.depth_image = None
+		self.semantic_image = None
 		self.capture = True
 		self.depth_capture = True
+		self.semantic_capture = True
 		self.counter = 0
 		self.depth = None
+		self.semantic = None
 		self.pose = []
 		self.log = False
 		
 
-
-	def camera_blueprint(self):
+	def camera_blueprint(self, type = 'rgb'):
 		"""
+		type: rgb, depth or semantic
 		Returns camera blueprint.
 		"""
 
-		camera_bp = self.world.get_blueprint_library().find('sensor.camera.rgb')
+		camera_bp = self.world.get_blueprint_library().find('sensor.camera.' + type)
+		if(camera_bp == None):
+			print(type + 'camera was not created')
 		camera_bp.set_attribute('image_size_x', str(VIEW_WIDTH))
 		camera_bp.set_attribute('image_size_y', str(VIEW_HEIGHT))
 		camera_bp.set_attribute('fov', str(VIEW_FOV))
+		
 		return camera_bp
-		
-	def depth_camera_blueprint(self):
-		"""
-		Returns camera blueprint.
-		"""
 
-		depth_camera_bp = self.world.get_blueprint_library().find('sensor.camera.depth')
-		depth_camera_bp.set_attribute('image_size_x', str(VIEW_WIDTH))
-		depth_camera_bp.set_attribute('image_size_y', str(VIEW_HEIGHT))
-		depth_camera_bp.set_attribute('fov', str(VIEW_FOV))
-		return depth_camera_bp
-		
 
 	def set_synchronous_mode(self, synchronous_mode):
 		"""
@@ -148,7 +147,8 @@ class BasicSynchronousClient(object):
 		Sets calibration for client-side boxes rendering.
 		"""
 
-		camera_transform = carla.Transform(carla.Location(x=-5.5, z=2.8), carla.Rotation(pitch=-15))
+		# camera_transform = carla.Transform(carla.Location(x=-5.5, z=2.8), carla.Rotation(pitch=-15))
+		camera_transform = carla.Transform(carla.Location(x=0, z=3.2), carla.Rotation(pitch=0))
 		self.camera = self.world.spawn_actor(self.camera_blueprint(), camera_transform, attach_to=self.car)
 		weak_self = weakref.ref(self)
 		self.camera.listen(lambda image: weak_self().set_image(weak_self, image))
@@ -165,8 +165,8 @@ class BasicSynchronousClient(object):
 		Sets calibration for client-side boxes rendering.
 		"""
 
-		depth_camera_transform = carla.Transform(carla.Location(x=0, z=2.8), carla.Rotation(pitch=0))
-		self.depth_camera = self.world.spawn_actor(self.depth_camera_blueprint(), depth_camera_transform, attach_to=self.car)
+		depth_camera_transform = carla.Transform(carla.Location(x=0, z=3.2), carla.Rotation(pitch=0))
+		self.depth_camera = self.world.spawn_actor(self.camera_blueprint('depth'), depth_camera_transform, attach_to=self.car)
 		weak_depth_self = weakref.ref(self)
 		self.depth_camera.listen(lambda depth_image: weak_depth_self().set_depth_image(weak_depth_self, depth_image))
 
@@ -175,6 +175,23 @@ class BasicSynchronousClient(object):
 		calibration[1, 2] = VIEW_HEIGHT / 2.0
 		calibration[0, 0] = calibration[1, 1] = VIEW_WIDTH / (2.0 * np.tan(VIEW_FOV * np.pi / 360.0))
 		self.depth_camera.calibration = calibration
+
+	def setup_semantic_camera(self):
+		"""
+		Spawns actor-camera to be used to render view.
+		Sets calibration for client-side boxes rendering.
+		"""
+
+		semantic_camera_transform = carla.Transform(carla.Location(x=0, z=3.2), carla.Rotation(pitch=0))
+		self.semantic_camera = self.world.spawn_actor(self.camera_blueprint('semantic_segmentation'), semantic_camera_transform, attach_to=self.car)
+		weak_semantic_self = weakref.ref(self)
+		self.semantic_camera.listen(lambda semantic_image: weak_semantic_self().set_semantic_image(weak_semantic_self, semantic_image))
+
+		calibration = np.identity(3)
+		calibration[0, 2] = VIEW_WIDTH / 2.0
+		calibration[1, 2] = VIEW_HEIGHT / 2.0
+		calibration[0, 0] = calibration[1, 1] = VIEW_WIDTH / (2.0 * np.tan(VIEW_FOV * np.pi / 360.0))
+		self.semantic_camera.calibration = calibration
 
 	def control(self, car):
 		"""
@@ -240,12 +257,27 @@ class BasicSynchronousClient(object):
 			self.depth_image = depth_img
 			self.depth_capture = False
 
-	def render(self, display):
+	@staticmethod
+	def set_semantic_image(weak_semantic_self, semantic_img):
+		"""
+		Sets image coming from camera sensor.
+		The self.capture flag is a mean of synchronization - once the flag is
+		set, next coming image will be stored.
+		"""
+
+		self = weak_semantic_self()
+		if self.semantic_capture:
+			self.semantic_image = semantic_img
+			self.semantic_capture = False
+
+
+	def render(self, display, count):
 		"""
 		Transforms image from camera sensor and blits it to main pygame display.
 		"""
 
 		if self.image is not None:
+			# self.image.save_to_disk("../carlaData/image/img" + str(count) + ".png")
 			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
 			array = np.reshape(array, (self.image.height, self.image.width, 4))
 			array = array[:, :, :3]
@@ -253,13 +285,42 @@ class BasicSynchronousClient(object):
 			surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
 			display.blit(surface, (0, 0))
 
-	def depth_render(self, depth_display):
+	def depth_render(self, depth_display, count):	
 		if self.depth_image is not None:
+			# self.depth_image.save_to_disk("../carlaData/depth/depth" + str(count) + ".png")
 			i = np.array(self.depth_image.raw_data)
 			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
 			i3 = i2[:, :, :3]
 			self.depth = i3
 			cv2.imshow("depth_image", self.depth)
+
+	def semantic_render(self, semantic_display, count):
+		if self.semantic_image is not None:
+			# self.semantic_image.save_to_disk("../carlaData/semantic/sem" + str(count) + ".png")
+
+			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
+			# self.semantic_image.convert(carla.ColorConverter)
+			i = np.array(self.semantic_image.raw_data)
+
+			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
+			i3 = i2[:, :, :3]
+
+			self.semantic = i2
+			cv2.imshow("semantic_image", self.semantic)
+
+	def save(self, count):
+		if self.image is not None:
+			self.image.save_to_disk("../carlaData/image/id%05d.png" % count)
+
+	def depth_save(self, count):
+		if self.depth_image is not None:
+			self.depth_image.save_to_disk("../carlaData/depth/id%05d.png" % count)
+	
+	def semantic_save(self, count):
+		if self.semantic_image is not None:
+			self.semantic_image.save_to_disk("../carlaData/semantic/id%05d.png" % count)
+			self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
+			self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
 
 
 	def log_data(self):
@@ -280,8 +341,6 @@ class BasicSynchronousClient(object):
 				self.counter += 1
 			start = time.time()
 		
-			
-		
 
 	def game_loop(self):
 		"""
@@ -298,34 +357,51 @@ class BasicSynchronousClient(object):
 			self.setup_car()
 			self.setup_camera()
 			self.setup_depth_camera()
+			self.setup_semantic_camera()
+
 			self.display = pygame.display.set_mode((VIEW_WIDTH, VIEW_HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
 			self.depth_display = cv2.namedWindow('depth_image')
+			self.semantic_display = cv2.namedWindow('semantic_image')
 
 			pygame_clock = pygame.time.Clock()
 
 			self.set_synchronous_mode(True)
 			vehicles = self.world.get_actors().filter('vehicle.*')
+			count = 0
+			# Wait for the next tick and retrieve the snapshot of the tick.
+			# world_snapshot = self.world.wait_for_tick()
+
+			# # Register a callback to get called every time we receive a new snapshot.
+			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
 			while True:
 				self.world.tick()
 				self.capture = True
 				self.depth_capture = True
+				self.semantic_capture = True
 				pygame_clock.tick_busy_loop(30)
-				self.render(self.display)
+				self.render(self.display, count)
+				self.depth_render(self.depth_display, count)
+				self.semantic_render(self.semantic_display, count)
+				if(not (count % 4)):
+					self.save(count//4)
+					self.depth_save(count//4)
+					self.semantic_save(count//4)
 				pygame.display.flip()
 				pygame.event.pump()
-				self.depth_render(self.depth_display)
 				self.log_data()
 				cv2.waitKey(1)
 				if self.control(self.car):
 					return
-				
+				count += 1
+
 		#except Exception as e: print(e)
 		finally:
 
 			self.set_synchronous_mode(False)
 			self.camera.destroy()
 			self.depth_camera.destroy()
+			self.semantic_camera.destroy()
 			self.car.destroy()
 			pygame.quit()
 			cv2.destroyAllWindows()
