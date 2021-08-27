@@ -1,8 +1,13 @@
+#vscode
+*.vscode/
+*objects/
+
 #pre trained models
 *.h5
 
 #images examples
 *.png
+*.avi
 
 #tensorflow logs
 logs/
