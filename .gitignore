@@ -1,6 +1,12 @@
+#extra files
+*common/
+*ch7/
+*.o
+
 #vscode
 *.vscode/
 *objects/
+
 
 #pre trained models
 *.h5

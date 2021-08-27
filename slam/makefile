@@ -5,8 +5,8 @@ PROJ_NAME_DEBUG=debugSlam.o
 # .cpp files
 CPP_SOURCE=$(wildcard ./src/*.cpp)
 
-# .h files
-H_SOURCE=$(wildcard ./src/*.h)
+# .hpp files
+H_SOURCE=$(wildcard ./src/*.hpp)
 
 # Object files
 OBJ=$(subst .cpp,.o,$(subst src,objects,$(CPP_SOURCE)))
@@ -45,7 +45,7 @@ $(PROJ_NAME): $(OBJ)
 	@ echo 'Finished building binary: $@'
 	@ echo ' '
 
-./objects/%.o: ./src/%.cpp ./src/include/%.h
+./objects/%.o: ./src/%.cpp ./src/include/%.hpp
 	@ echo 'Building target using GCC compiler: $<'
 	$(CC) $< $(CC_FLAGS) -o $@ $(LIBS)
 	@ echo ' '
@@ -73,7 +73,7 @@ clean:
 # 	@ echo 'Finished building binary: $@'
 # 	@ echo ' '
 
-# ./objectsDebug/%.o: ./src/%.cpp ./src/include/%.h
+# ./objectsDebug/%.o: ./src/%.cpp ./src/include/%.hpp
 # 	@ echo 'Building target using GCC compiler: $<'
 # 	$(CC) $< $(CC_FLAGS_DEBUG) -o $@ $(LIBS)
 # 	@ echo ' '

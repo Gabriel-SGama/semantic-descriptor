@@ -1,22 +1,108 @@
-/* =========== */
-/*  Libraries  */
-/* =========== */
-/* System Libraries */
-// #include <iostream>
-// #include <string>
-// #include <vector>
-// #include <chrono>
 
-/* OpenCV Libraries */
-// #include <opencv2/opencv.hpp>
-#include "include/libUtils_opencv.h"
-// #include <opencv2/core/core.hpp>
-// #include <opencv2/highgui/highgui.hpp>
-// #include <opencv2/imgproc/imgproc.hpp>
-
+#include "include/libUtils.hpp"
 
 using namespace std;
+using namespace Eigen;
 using namespace cv;
+
+
+void printCharVec(const uint32_t &desc){
+
+    cout << ((desc >> 24) & 255) << ", ";
+    cout << ((desc >> 16) & 255) << ", ";
+    cout << ((desc >> 8) & 255) << ", ";
+    cout << (desc & 255);
+
+}
+
+
+/* Basic */
+void printVec(const char text[], const std::vector<uint32_t> &vec){
+    cout << text << "[";
+    for(size_t i=0; i < vec.size(); i++){
+        if(i != vec.size()-1){
+            printCharVec(vec.at(i));
+            // cout << vec.at(i) << ";";
+            cout << ", ";
+        }else{
+            printCharVec(vec.at(i));
+
+            // cout << vec.at(i);
+        }
+    }
+    cout << "]" << endl;
+}
+
+
+template <typename TTypeVec>
+TTypeVec slicing(TTypeVec &arr, int begin_idx, int end_idx){
+    // Starting and Ending iterators
+    auto start = arr.begin() + begin_idx;
+    auto end = arr.begin() + end_idx + 1;
+
+    // To store the sliced vector
+    TTypeVec result(end_idx - begin_idx + 1);
+
+    // Copy vector using copy function()
+    copy(start, end, result.begin());
+
+    // Return the final sliced vector
+    return result;
+}
+
+/* Chrono */
+void printElapsedTime(const char text[], Timer t1, Timer t2){
+    chrono::duration<double> time_elapsed = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    cout << text << time_elapsed.count() << " s" << endl;
+}
+
+
+/* ========================== */
+/*  Eigen3/Sophus' Functions  */
+/* ========================== */
+template <typename TTypeEigenMat>
+void printMatrix(const char text[], TTypeEigenMat mat){
+    cout << text << endl;
+    cout << mat << "\n" << "(" << mat.rows() << ", " << mat.cols() << ")" << endl << endl;
+}
+
+template <typename TTypeEigenVec>
+void printVector(const char text[], TTypeEigenVec vec){
+    cout << text << endl;
+    cout << vec << "\n" << "(" << vec.size() << ",)" << endl << endl;
+}
+
+template <typename TTypeEigenQuat>
+void printQuaternion(const char text[], TTypeEigenQuat quat){
+    cout << text << quat.coeffs().transpose() << endl << endl;
+}
+
+double RMSE(const Vector3d &est, const Vector3d &gt){
+    double sum = 0.0;
+    int N = est.size();
+
+    for(int i=0; i<N; i++){
+        sum += pow(est[i]-gt[i], 2.0);
+    }
+
+    return sqrt(sum/(double)N);
+}
+
+/**
+ * @brief Convert Normalized Coordinates to Pixel Coordinates (Image Plane, f=1)
+ *
+ * @param x Point2f in Normalized Coordinates, x=(x,y)=(X/Z, Y/Z)
+ * @param K Intrinsic Parameters Matrix
+ * @return Point2f in Pixel Coordinates Coordinates, p=(u,v)
+ */
+Vector2d cam2pixel(const Vector3d &P, const Matrix3d &K) {
+    return Vector2d(
+        K(0, 0)*P[0]/P[2] + K(0, 2),  // u = fx*x + cx
+        K(1, 1)*P[1]/P[2] + K(1, 2)   // v = fy*y + cy
+    );
+}
+
+
 
 /* ==================== */
 /*  OpenCV's Functions  */
