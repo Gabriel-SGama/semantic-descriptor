@@ -16,6 +16,7 @@ CC=g++
 
 # Flags for compiler
 CC_FLAGS= -c	\
+		  -Wall \
 		  -msse4 \
 
 CC_FLAGS_DEBUG = -g \

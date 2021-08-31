@@ -7,14 +7,10 @@
 #include <nmmintrin.h>
 #include <bitset>
 
-/* OpenCV Libraries */
-// #include <opencv2/core/core.hpp>
-// #include <opencv2/features2d/features2d.hpp>
-// #include <opencv2/highgui/highgui.hpp>
-
 /* Custom Libraries */
 #include "include/libUtils.hpp"
 #include "include/ORBFeatures.hpp"
+#include "include/Pose_estimation.hpp"
 
 using namespace std;
 using namespace cv;
@@ -35,7 +31,7 @@ const int PATCH_SIZE = 31;
 const int HALF_PATCH_SIZE = 24;
 // const float factorPI = CV_PI/180.0;
 
-double matches_lower_bound = 60.0;
+double matches_lower_bound = 30.0;
 
 /* ====== */
 /*  Main  */
@@ -43,8 +39,16 @@ double matches_lower_bound = 60.0;
 /* This program demonstrates how to extract ORB features and perform matching using the OpenCV library. */
 int main(int argc, char **argv) {
     cout << "[orb_cv] Hello!" << endl << endl;
+    
+    // VideoCapture cap("/home/gama/code/semantic-descriptor/carlaData/project.avi"); 
+    // // Check if camera opened successfully
+    // if(!cap.isOpened()){
+    //     cout << "Error opening video stream or file" << endl;
+    //     return -1;
+    // }
 
     ORBFeatures *orbFeatures = new ORBFeatures();
+    Pose_estimation *pose_estimation = new Pose_estimation();
 
     /* Load the images */
     Mat image1 = imread(image1_filepath, IMREAD_COLOR);
@@ -54,6 +58,7 @@ int main(int argc, char **argv) {
     cvtColor(image1, image_gray1, COLOR_BGR2GRAY);
     cvtColor(image2, image_gray2, COLOR_BGR2GRAY);
 
+
     Mat semantic1 = imread(semantic1_filepath, IMREAD_COLOR);
     // Mat semantic1color = imread(semantic1color_filepath, IMREAD_COLOR);
     
@@ -62,8 +67,7 @@ int main(int argc, char **argv) {
 
     /* Initialization */
     vector<KeyPoint> keypoints1, keypoints2;
-    Mat descriptors1, descriptors2;
-    Mat sem_descriptor1, sem_descriptor2;
+    Mat descriptors1, descriptors2, sem_descriptor1, sem_descriptor2;
 
     /* --------------------- */
     /*  Features Extraction  */
@@ -74,30 +78,46 @@ int main(int argc, char **argv) {
 
     //--- Step 1: Detect the position of the Oriented FAST keypoints (Corner Points)
     Timer t1 = chrono::steady_clock::now();
-    detector->detect(image_gray1, keypoints1);
-    detector->detect(image_gray2, keypoints2);
+    detector->detect(image1, keypoints1);
+    detector->detect(image2, keypoints2);
     Timer t2 = chrono::steady_clock::now();
 
     //--- Step 2: Calculate the BRIEF descriptors based on the position of Oriented FAST keypoints
-    descriptor->compute(image1, keypoints1, descriptors1);
-    descriptor->compute(image2, keypoints2, descriptors2);
-    
-    // orbFeatures->computeDesc(image_gray1, keypoints1, descriptors1);
-    // orbFeatures->computeDesc(image_gray2, keypoints2, descriptors2);
-    
-    orbFeatures->convertDesc(descriptors1, sem_descriptor1, semantic1);
-    orbFeatures->convertDesc(descriptors2, sem_descriptor2, semantic2);
+    // descriptor->compute(image1, keypoints1, sem_descriptor1);
+    // descriptor->compute(image2, keypoints2, sem_descriptor2);
+    // cout << descriptors1.row(0) << endl;
 
-    orbFeatures->computeSemanticDesc(semantic1, keypoints1, sem_descriptor1);
-    orbFeatures->computeSemanticDesc(semantic2, keypoints2, sem_descriptor2);
+    orbFeatures->computeDesc(image_gray1, keypoints1, sem_descriptor1);
+    orbFeatures->computeDesc(image_gray2, keypoints2, sem_descriptor2);
+    
+    cout << sem_descriptor1.row(0) << endl;
+
+    // for (int i = 0; i < nfeatures; i++)
+    // {
+    //     for (int j = 0; j < descriptors1.cols; j++)
+    //     {
+    //         if(descriptors1.at<uchar>(i,j) != sem_descriptor1.at<uchar>(i,j)){
+    //             cout << j << endl;
+    //             cout << descriptors1.row(i) << endl;
+    //             cout << sem_descriptor1.row(i) << endl;
+    //             cout << keypoints1[i].pt << endl;
+    //             cout << keypoints1[i-1].octave << endl;
+    //             cout << keypoints1[i].octave << endl;
+    //             return 0;
+    //         }
+    //     }
+        
+    // }
+    
+
+    // orbFeatures->convertDesc(descriptors1, sem_descriptor1, semantic1);
+    // orbFeatures->convertDesc(descriptors2, sem_descriptor2, semantic2);
+
+    // orbFeatures->computeSemanticDesc(semantic1, keypoints1, sem_descriptor1);
+    // orbFeatures->computeSemanticDesc(semantic2, keypoints2, sem_descriptor2);
 
     Timer t3 = chrono::steady_clock::now();
 
-    // cout << keypoints1.size() << endl;
-    // cout << descriptors1.row(0) << endl;
-    // cout << sem_descriptor1.row(0) << endl;
-    // cout << "--------------------------------" << endl;
-    
     /* ------------------- */
     /*  Features Matching  */
     /* ------------------- */
@@ -105,8 +125,8 @@ int main(int argc, char **argv) {
     vector<DMatch> matches;
 
     Timer t4 = chrono::steady_clock::now();
-    orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
-    // matcher->match(descriptors1, descriptors2, matches);
+    // orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
+    matcher->match(sem_descriptor1, sem_descriptor2, matches);
     Timer t5 = chrono::steady_clock::now();
 
     /* -------------------- */
@@ -152,19 +172,15 @@ int main(int argc, char **argv) {
     drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
     drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
     
-    // drawKeypoints(image_gray1, keypoints_gray1, outImage_gray1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
-    // drawKeypoints(image_gray2, keypoints_gray2, outImage_gray2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
-
     drawMatches(image1, keypoints1, image2, keypoints2, matches, image_matches,
         Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
     drawMatches(image1, keypoints1, image2, keypoints2, goodMatches, image_goodMatches,
         Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
-
-    cout << "OpenCV version : " << CV_VERSION << endl;
-    cout << "Major version : " << CV_MAJOR_VERSION << endl;
-    cout << "Minor version : " << CV_MINOR_VERSION << endl;
-    cout << "Subminor version : " << CV_SUBMINOR_VERSION << endl;
+    cout << "OpenCV version: " << CV_VERSION << endl;
+    cout << "Major version: " << CV_MAJOR_VERSION << endl;
+    cout << "Minor version: " << CV_MINOR_VERSION << endl;
+    cout << "Subminor version: " << CV_SUBMINOR_VERSION << endl;
 
     // /* Results */
     printElapsedTime("ORB Features Extraction: ", t1, t3);
@@ -183,6 +199,40 @@ int main(int argc, char **argv) {
     cout << "-- Max dist: " << max_dist << endl;
     cout << "-- Number of good matches: " << goodMatches.size() << endl << endl;
     cout << "In total, we get " << goodMatches.size() << "/" << matches.size() << " good pairs of feature points." << endl << endl;
+    // Focus_length = ImageSizeX /(2 * tan(CameraFOV * π / 360))
+    // Center_X = ImageSizeX / 2
+    // Center_Y = ImageSizeY / 2
+    // Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
+    Mat K = (Mat_<double>(3, 3) << 256.0, 0, 256.0, 0, 256.0, 256.0, 0, 0, 1);
+    Mat R,t;
+    pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
+
+    string flag;
+    Mat t_hat = pose_estimation->vee2hat(t);
+    int counter = 0;
+
+    for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
+        // Pixel Coordinates to Normalized Coordinates, {(p1, p2)}_n to {(x1, x2)}_n
+        Point2f x1 = pixel2cam(keypoints1[m.queryIdx].pt, K);  // p1->x1, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 1
+        Point2f x2 = pixel2cam(keypoints2[m.trainIdx].pt, K);  // p2->x2, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 2
+
+        // Convert to Homogeneous Coordinates
+        Mat xh1 = (Mat_<double>(3,1) << x1.x, x1.y, 1);
+        Mat xh2 = (Mat_<double>(3,1) << x2.x, x2.y, 1);
+
+        // Calculate Epipolar Constraint
+        double res = ((cv::Mat)(xh2.t()*t_hat*R*xh1)).at<double>(0);
+
+        if(res > -1e-2 && res < 1e-2){
+            flag = "Ok!";
+            counter++;
+        }else
+            flag = "Failed!";
+
+        printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
+    }
+
+    cout << "\nFinal Result: " << counter << "/" << goodMatches.size() << " Features Pairs respected the Epipolar Constraint!"<< endl << endl;
 
     /* Display */
     //input

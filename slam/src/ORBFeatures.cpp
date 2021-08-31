@@ -1,4 +1,5 @@
 #include <nmmintrin.h>
+#include <math.h>
 
 #include "include/ORBFeatures.hpp"
 
@@ -13,22 +14,77 @@ ORBFeatures::ORBFeatures(int maxFeatures, int nrBrief, int nSemrBrief, int patch
     this->patch_size = patch_size;
     this->half_patch_size = half_patch_size;
     this->matches_lower_bound = matches_lower_bound;
+
+    scaleFactor = 1.2;
+    nLevels = 8;
+    imagePyramid.resize(nLevels);
+
+    imagePyramidScale.resize(nLevels);
+    imagePyramidScale[0]=1.0f;
+
+    for(int i=1; i<nLevels; i++)
+    {
+        imagePyramidScale[i]=imagePyramidScale[i-1]/scaleFactor;
+    }
+    
+    // for(int i = 0; i < nLevels; i++){
+    //     imagePyramidScale[i] = (float)pow(scaleFactor, i);
+    // }
+    
 }
 
 
+void ORBFeatures::createPyramid(const Mat img){
+    const int EDGE_THRESHOLD = 31;
+
+    for (int level = 0; level < nLevels; ++level){
+
+        float scale = imagePyramidScale[level];
+        Size sz(cvRound((float)img.cols*scale), cvRound((float)img.rows*scale));
+        Size wholeSize(sz.width + EDGE_THRESHOLD*2, sz.height + EDGE_THRESHOLD*2);
+        Mat temp(wholeSize, img.type()), masktemp;
+        imagePyramid[level] = temp(Rect(EDGE_THRESHOLD, EDGE_THRESHOLD, sz.width, sz.height));
+
+        // Compute the resized image
+        if( level != 0 )
+        {
+            resize(imagePyramid[level-1], imagePyramid[level], sz, 0, 0, INTER_LINEAR);
+
+            copyMakeBorder(imagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                           BORDER_REFLECT_101+BORDER_ISOLATED);            
+        }
+        else
+        {
+            copyMakeBorder(img, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                           BORDER_REFLECT_101);
+            // imagePyramid[0] = img.clone();            
+        }
+        
+    }
+
+}
+
+
+
 void ORBFeatures::computeDesc(const Mat &img, vector<KeyPoint> &keypoints, Mat &descriptor){
-    GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
     
+    createPyramid(img);
+    
+    for(int i = 0; i < nLevels; i++)
+        GaussianBlur(imagePyramid[i], imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
+    // GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
+    
+
     descriptor = Mat::zeros(keypoints.size(), nrBrief/8 /*+ nSemrBrief/6*/, CV_8UC1);
     // descriptor.create(500, 32, CV_8UC1);
+    
+    
     int count_kp = 0;
 
-    #define GET_VALUE(idx_p,a,b) \
-            center[cvRound(ORB_pattern[idx_p]*b + ORB_pattern[idx_p+1]*a)*step + \
-                   cvRound(ORB_pattern[idx_p]*a - ORB_pattern[idx_p+1]*b)]
-        
+
     for(auto &kp: keypoints){
-        float m01=0.0, m10=0.0;
+        // cout << kp.octave << " | " <<kp.pt << " | " << kp.size << endl;
+          // float m01=0.0, m10=0.0;
 
         // for(int y = -HALF_PATCH_SIZE; y <= HALF_PATCH_SIZE; y++){
         //     for(int x = -HALF_PATCH_SIZE; x <= HALF_PATCH_SIZE; x++){
@@ -38,7 +94,7 @@ void ORBFeatures::computeDesc(const Mat &img, vector<KeyPoint> &keypoints, Mat &
         // }
         
         // kp.angle = atan2(m01, m10);
-        // float angle = cvRound((kp.angle)/(CV_PI/15.0));
+        // float angle = cvRound((kp.angle*factorPI)/(CV_PI/15.0));
         
         // angle *= CV_PI/15.0;
 
@@ -48,47 +104,53 @@ void ORBFeatures::computeDesc(const Mat &img, vector<KeyPoint> &keypoints, Mat &
         float sin_kp = sin(kp.angle*factorPI);
         float cos_kp = cos(kp.angle*factorPI);
 
+
+        // const u_char* center = &imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*imagePyramidScale[kp.octave]), cvRound(kp.pt.x*imagePyramidScale[kp.octave]));
+        // const int step = (int)imagePyramid[kp.octave].step;
         // float a = cos_kp;
         // float b = sin_kp;
-
+        
+        float scale = imagePyramidScale[kp.octave];
+        // #define GET_VALUE(idx_p) /*\//
+        //     center[cvRound(scale*cvRound(ORB_pattern[idx_p]*sin_kp + ORB_pattern[idx_p+1]*cos_kp)*step + \
+        //            cvRound(ORB_pattern[idx_p]*cos_kp - ORB_pattern[idx_p+1]*sin_kp))]
+        
         
         for(int i = 0; i < 32; i++){
             u_char desc = 0;
             int idx = i*8*4;
-            
-            const u_char* center = &img.at<uchar>(cvRound(kp.pt.y), cvRound(kp.pt.x));
-            const int step = (int)img.step;
-            
+      
             for(int pt = 0; pt < 8*4; pt+=4){
             // for(int pt = 0; pt < 8*4; pt+=4){
                 
+                Point2f p(ORB_pattern[idx + pt], ORB_pattern[idx + pt + 1]);
+                Point2f q(ORB_pattern[idx + pt + 2],ORB_pattern[idx + pt + 3]);
                 
-                // Point2f p(ORB_pattern[idx + pt], ORB_pattern[idx + pt + 1]);
-                // Point2f q(ORB_pattern[idx + pt + 2],ORB_pattern[idx + pt + 3]);
-                
-                // Point2f pp = Point2f(cvRound(cos_kp*p.x - sin_kp*p.y + kp.pt.x), cvRound(sin_kp*p.x + cos_kp*p.y + kp.pt.y));
-                // Point2f qq = Point2f(cvRound(cos_kp*q.x - sin_kp*q.y + kp.pt.x), cvRound(sin_kp*q.x + cos_kp*q.y + kp.pt.y));
+                Point2f pp = Point2f(cvRound((cos_kp*p.x - sin_kp*p.y + scale*kp.pt.x)), cvRound((sin_kp*p.x + cos_kp*p.y + scale*kp.pt.y)));
+                Point2f qq = Point2f(cvRound((cos_kp*q.x - sin_kp*q.y + scale*kp.pt.x)), cvRound((sin_kp*q.x + cos_kp*q.y + scale*kp.pt.y)));
 
                 // Point2f pp = Point2f((cos_kp*p.x - sin_kp*p.y), (sin_kp*p.x + cos_kp*p.y)) + kp.pt;
                 // Point2f qq = Point2f((cos_kp*q.x - sin_kp*q.y), (sin_kp*q.x + cos_kp*q.y)) + kp.pt;
 
-                desc |= (GET_VALUE(idx + pt,cos_kp,sin_kp) < GET_VALUE(idx + pt + 2,cos_kp,sin_kp)) << (int)(pt*0.25);
-                // if(img.at<uchar>(pp.y, pp.x) < img.at<uchar>(qq.y, qq.x))
-                //     desc |= 1 << (int)(pt*0.25);
+                // desc |= (GET_VALUE(idx + pt) < GET_VALUE(idx + pt + 2)) << cvRound(pt*0.25);
+                if(imagePyramid[kp.octave].at<uchar>(pp.y, pp.x) < imagePyramid[kp.octave].at<uchar>(qq.y, qq.x))
+                    desc |= 1 << cvRound(pt*0.25);
 
             }
             descriptor.at<uchar>(count_kp, i) = desc;
         }
         count_kp++;
+    
+        // #undef GET_VALUE
     }
-    #undef GET_VALUE
+
 }
 
 
 void ORBFeatures::computeSemanticDesc(const Mat &sem_img, const vector<KeyPoint> &keypoints, Mat &descriptor){
     // descriptor.create(maxFeatures, nrBrief/32 + nSemrBrief/6, CV_32SC1);
 
-    int n, cols, idxSemDescCol, count_kp = 0;
+    int count_kp = 0;
 
     for(auto &kp: keypoints){
         float sin_kp = sin(kp.angle*factorPI);
