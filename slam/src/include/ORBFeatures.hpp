@@ -14,7 +14,7 @@ private:
     int patch_size;
     int half_patch_size;
     int nLevels;
-    float scaleFactor;
+    double scaleFactor;
     
   
     int ORB_pattern[256*4] = {
@@ -279,7 +279,7 @@ private:
     float matches_lower_bound;
 
     std::vector<cv::Mat> imagePyramid;
-    std::vector<float> imagePyramidScale;
+    std::vector<double> imagePyramidScale;
     
     void createPyramid(const cv::Mat img);
 

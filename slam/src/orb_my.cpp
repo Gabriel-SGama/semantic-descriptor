@@ -20,7 +20,6 @@ string image1_filepath = "../carlaData/image/id00044.png";
 string image2_filepath = "../carlaData/image/id00045.png";
 
 string semantic1_filepath = "../carlaData/semantic/id00044.png";
-string semantic1color_filepath = "../carlaData/semantic/idcolor00044.png";
 string semantic2_filepath = "../carlaData/semantic/id00045.png";
 
 
@@ -40,12 +39,12 @@ double matches_lower_bound = 30.0;
 int main(int argc, char **argv) {
     cout << "[orb_cv] Hello!" << endl << endl;
     
-    // VideoCapture cap("/home/gama/code/semantic-descriptor/carlaData/project.avi"); 
-    // // Check if camera opened successfully
-    // if(!cap.isOpened()){
-    //     cout << "Error opening video stream or file" << endl;
-    //     return -1;
-    // }
+    VideoCapture cap("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_camera.avi"); 
+    // Check if camera opened successfully
+    if(!cap.isOpened()){
+        cout << "Error opening video stream or file" << endl;
+        return -1;
+    }
 
     ORBFeatures *orbFeatures = new ORBFeatures();
     Pose_estimation *pose_estimation = new Pose_estimation();
@@ -58,9 +57,7 @@ int main(int argc, char **argv) {
     cvtColor(image1, image_gray1, COLOR_BGR2GRAY);
     cvtColor(image2, image_gray2, COLOR_BGR2GRAY);
 
-
     Mat semantic1 = imread(semantic1_filepath, IMREAD_COLOR);
-    // Mat semantic1color = imread(semantic1color_filepath, IMREAD_COLOR);
     
     Mat semantic2 = imread(semantic2_filepath, IMREAD_COLOR);
     // assert(image1.data != nullptr && image2.data != nullptr);  // FIXME: I think this its not working!
@@ -83,36 +80,12 @@ int main(int argc, char **argv) {
     Timer t2 = chrono::steady_clock::now();
 
     //--- Step 2: Calculate the BRIEF descriptors based on the position of Oriented FAST keypoints
-    // descriptor->compute(image1, keypoints1, sem_descriptor1);
-    // descriptor->compute(image2, keypoints2, sem_descriptor2);
-    // cout << descriptors1.row(0) << endl;
+    // descriptor->compute(image1, keypoints1, descriptors1);
+    // descriptor->compute(image2, keypoints2, descriptors2);
 
     orbFeatures->computeDesc(image_gray1, keypoints1, sem_descriptor1);
     orbFeatures->computeDesc(image_gray2, keypoints2, sem_descriptor2);
     
-    cout << sem_descriptor1.row(0) << endl;
-
-    // for (int i = 0; i < nfeatures; i++)
-    // {
-    //     for (int j = 0; j < descriptors1.cols; j++)
-    //     {
-    //         if(descriptors1.at<uchar>(i,j) != sem_descriptor1.at<uchar>(i,j)){
-    //             cout << j << endl;
-    //             cout << descriptors1.row(i) << endl;
-    //             cout << sem_descriptor1.row(i) << endl;
-    //             cout << keypoints1[i].pt << endl;
-    //             cout << keypoints1[i-1].octave << endl;
-    //             cout << keypoints1[i].octave << endl;
-    //             return 0;
-    //         }
-    //     }
-        
-    // }
-    
-
-    // orbFeatures->convertDesc(descriptors1, sem_descriptor1, semantic1);
-    // orbFeatures->convertDesc(descriptors2, sem_descriptor2, semantic2);
-
     // orbFeatures->computeSemanticDesc(semantic1, keypoints1, sem_descriptor1);
     // orbFeatures->computeSemanticDesc(semantic2, keypoints2, sem_descriptor2);
 
@@ -229,7 +202,7 @@ int main(int argc, char **argv) {
         }else
             flag = "Failed!";
 
-        printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
+        // printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
     }
 
     cout << "\nFinal Result: " << counter << "/" << goodMatches.size() << " Features Pairs respected the Epipolar Constraint!"<< endl << endl;
@@ -240,11 +213,11 @@ int main(int argc, char **argv) {
     // imshow("image2", image2);
 
     imshow("semantic1", semantic1);
-    // imshow("semantic1color", semantic1color);
     // imshow("semantic2", semantic2);
+
     //output
     imshow("outImage1", outImage1);
-    // imshow("outImage2", outImage2);
+    imshow("outImage2", outImage2);
 
     // imshow("outImage_gray1", outImage_gray1);
     // imshow("outImage_gray2", outImage_gray2);

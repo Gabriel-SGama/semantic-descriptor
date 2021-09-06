@@ -20,7 +20,7 @@ ORBFeatures::ORBFeatures(int maxFeatures, int nrBrief, int nSemrBrief, int patch
     imagePyramid.resize(nLevels);
 
     imagePyramidScale.resize(nLevels);
-    imagePyramidScale[0]=1.0f;
+    imagePyramidScale[0]=1.0;
 
     for(int i=1; i<nLevels; i++)
     {
@@ -39,7 +39,7 @@ void ORBFeatures::createPyramid(const Mat img){
 
     for (int level = 0; level < nLevels; ++level){
 
-        float scale = imagePyramidScale[level];
+        double scale = imagePyramidScale[level];
         Size sz(cvRound((float)img.cols*scale), cvRound((float)img.rows*scale));
         Size wholeSize(sz.width + EDGE_THRESHOLD*2, sz.height + EDGE_THRESHOLD*2);
         Mat temp(wholeSize, img.type()), masktemp;
@@ -48,7 +48,7 @@ void ORBFeatures::createPyramid(const Mat img){
         // Compute the resized image
         if( level != 0 )
         {
-            resize(imagePyramid[level-1], imagePyramid[level], sz, 0, 0, INTER_LINEAR);
+            resize(imagePyramid[level-1], imagePyramid[level], sz, 0, 0, INTER_LINEAR_EXACT);
 
             copyMakeBorder(imagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
                            BORDER_REFLECT_101+BORDER_ISOLATED);            
@@ -61,7 +61,6 @@ void ORBFeatures::createPyramid(const Mat img){
         }
         
     }
-
 }
 
 
@@ -81,19 +80,9 @@ void ORBFeatures::computeDesc(const Mat &img, vector<KeyPoint> &keypoints, Mat &
     
     int count_kp = 0;
 
+    u_char desc;
 
     for(auto &kp: keypoints){
-        // cout << kp.octave << " | " <<kp.pt << " | " << kp.size << endl;
-          // float m01=0.0, m10=0.0;
-
-        // for(int y = -HALF_PATCH_SIZE; y <= HALF_PATCH_SIZE; y++){
-        //     for(int x = -HALF_PATCH_SIZE; x <= HALF_PATCH_SIZE; x++){
-        //         m01 += y*img.at<uchar>(kp.pt.y+y, kp.pt.y+x);
-        //         m10 += x*img.at<uchar>(kp.pt.y+y, kp.pt.y+x);
-        //     }
-        // }
-        
-        // kp.angle = atan2(m01, m10);
         // float angle = cvRound((kp.angle*factorPI)/(CV_PI/15.0));
         
         // angle *= CV_PI/15.0;
@@ -104,45 +93,29 @@ void ORBFeatures::computeDesc(const Mat &img, vector<KeyPoint> &keypoints, Mat &
         float sin_kp = sin(kp.angle*factorPI);
         float cos_kp = cos(kp.angle*factorPI);
 
-
-        // const u_char* center = &imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*imagePyramidScale[kp.octave]), cvRound(kp.pt.x*imagePyramidScale[kp.octave]));
-        // const int step = (int)imagePyramid[kp.octave].step;
-        // float a = cos_kp;
-        // float b = sin_kp;
-        
         float scale = imagePyramidScale[kp.octave];
-        // #define GET_VALUE(idx_p) /*\//
-        //     center[cvRound(scale*cvRound(ORB_pattern[idx_p]*sin_kp + ORB_pattern[idx_p+1]*cos_kp)*step + \
-        //            cvRound(ORB_pattern[idx_p]*cos_kp - ORB_pattern[idx_p+1]*sin_kp))]
+        const u_char* center = &imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*scale), cvRound(kp.pt.x*scale));
+        const int step = (int)imagePyramid[kp.octave].step;
+        
+        // float scale = imagePyramidScale[kp.octave];
+        #define GET_VALUE(idx_p) \
+            center[(cvRound(ORB_pattern[idx_p]*sin_kp + ORB_pattern[idx_p+1]*cos_kp)*step + \
+                   cvRound(ORB_pattern[idx_p]*cos_kp - ORB_pattern[idx_p+1]*sin_kp))]
         
         
         for(int i = 0; i < 32; i++){
-            u_char desc = 0;
             int idx = i*8*4;
-      
-            for(int pt = 0; pt < 8*4; pt+=4){
-            // for(int pt = 0; pt < 8*4; pt+=4){
-                
-                Point2f p(ORB_pattern[idx + pt], ORB_pattern[idx + pt + 1]);
-                Point2f q(ORB_pattern[idx + pt + 2],ORB_pattern[idx + pt + 3]);
-                
-                Point2f pp = Point2f(cvRound((cos_kp*p.x - sin_kp*p.y + scale*kp.pt.x)), cvRound((sin_kp*p.x + cos_kp*p.y + scale*kp.pt.y)));
-                Point2f qq = Point2f(cvRound((cos_kp*q.x - sin_kp*q.y + scale*kp.pt.x)), cvRound((sin_kp*q.x + cos_kp*q.y + scale*kp.pt.y)));
-
-                // Point2f pp = Point2f((cos_kp*p.x - sin_kp*p.y), (sin_kp*p.x + cos_kp*p.y)) + kp.pt;
-                // Point2f qq = Point2f((cos_kp*q.x - sin_kp*q.y), (sin_kp*q.x + cos_kp*q.y)) + kp.pt;
-
-                // desc |= (GET_VALUE(idx + pt) < GET_VALUE(idx + pt + 2)) << cvRound(pt*0.25);
-                if(imagePyramid[kp.octave].at<uchar>(pp.y, pp.x) < imagePyramid[kp.octave].at<uchar>(qq.y, qq.x))
-                    desc |= 1 << cvRound(pt*0.25);
-
+            desc = 0;  
+            
+            for(int pt = 0; pt < 8; pt++){
+                desc |= (GET_VALUE(idx + 4*pt) < GET_VALUE(idx + 4*pt + 2)) << pt;
             }
             descriptor.at<uchar>(count_kp, i) = desc;
         }
         count_kp++;
     
-        // #undef GET_VALUE
     }
+    #undef GET_VALUE
 
 }
 

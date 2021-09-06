@@ -275,7 +275,6 @@ class BasicSynchronousClient(object):
 		"""
 		Transforms image from camera sensor and blits it to main pygame display.
 		"""
-
 		if self.image is not None:
 			# self.image.save_to_disk("../carlaData/image/img" + str(count) + ".png")
 			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
@@ -308,19 +307,36 @@ class BasicSynchronousClient(object):
 			self.semantic = i2
 			cv2.imshow("semantic_image", self.semantic)
 
-	def save(self, count):
+	def save(self, count, video_out, file_ptr):
+		pos = self.car.get_transform()
+		str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
+		file_ptr.write(str_pos)
+		
 		if self.image is not None:
-			self.image.save_to_disk("../carlaData/image/id%05d.png" % count)
+			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
+			array = np.reshape(array, (self.image.height, self.image.width, 4))
+			array = array[:, :, :3]
+			# array = array[:, :, ::-1]
+			video_out.write(array)
+			# self.image.save_to_disk("../carlaData/image/id%05d.png" % count)
 
-	def depth_save(self, count):
+	def depth_save(self, count, video_out):
 		if self.depth_image is not None:
-			self.depth_image.save_to_disk("../carlaData/depth/id%05d.png" % count)
+			self.depth_image = np.array(self.depth_image.raw_data)
+			self.depth_image = self.depth_image.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
+			self.depth_image = self.depth_image[:,:,:3]
+			video_out.write(self.depth_image)
+			# self.depth_image.save_to_disk("../carlaData/depth/id%05d.png" % count)
 	
-	def semantic_save(self, count):
+	def semantic_save(self, count, video_out):
 		if self.semantic_image is not None:
-			self.semantic_image.save_to_disk("../carlaData/semantic/id%05d.png" % count)
-			self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
-			self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
+			self.semantic_image = np.array(self.semantic_image.raw_data)
+			self.semantic_image = self.semantic_image.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
+			self.semantic_image = self.semantic_image[:,:,2]
+			video_out.write(self.semantic_image)
+			# self.semantic_image.save_to_disk("../carlaData/semantic/id%05d.png" % count)
+			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
+			# self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
 
 
 	def log_data(self):
@@ -328,8 +344,7 @@ class BasicSynchronousClient(object):
 			freq = 1/(time.time() - start)
 
 	#		sys.stdout.write("\rFrequency:{}Hz		Logging:{}".format(int(freq),self.log))
-			sys.stdout.write("\r{}".format(self.car.get_transform().rotation))
-
+			
 			sys.stdout.flush()
 			if self.log:
 				name ='log/' + str(self.counter) + '.png'
@@ -374,6 +389,17 @@ class BasicSynchronousClient(object):
 			# # Register a callback to get called every time we receive a new snapshot.
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
+			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
+			out_camera = cv2.VideoWriter('out_camera.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+
+			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
+			out_seg = cv2.VideoWriter('out_seg.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+
+			fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
+			out_depth = cv2.VideoWriter('out_depth.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+
+			file_ptr = open("pos.txt", 'w')
+
 			while True:
 				self.world.tick()
 				self.capture = True
@@ -383,10 +409,11 @@ class BasicSynchronousClient(object):
 				self.render(self.display, count)
 				self.depth_render(self.depth_display, count)
 				self.semantic_render(self.semantic_display, count)
-				if(not (count % 4)):
-					self.save(count//4)
-					self.depth_save(count//4)
-					self.semantic_save(count//4)
+				# if(not (count % 4)):
+
+				self.save(count, out_camera, file_ptr)
+				self.depth_save(count, out_depth)
+				self.semantic_save(count, out_seg)
 				pygame.display.flip()
 				pygame.event.pump()
 				self.log_data()
@@ -397,7 +424,7 @@ class BasicSynchronousClient(object):
 
 		#except Exception as e: print(e)
 		finally:
-
+			print(count)
 			self.set_synchronous_mode(False)
 			self.camera.destroy()
 			self.depth_camera.destroy()
@@ -405,6 +432,7 @@ class BasicSynchronousClient(object):
 			self.car.destroy()
 			pygame.quit()
 			cv2.destroyAllWindows()
+			file_ptr.close()
 
 
 # ==============================================================================
