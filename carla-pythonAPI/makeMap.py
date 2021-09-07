@@ -4,7 +4,8 @@ import numpy as np
 from numpy.core import machar
 import re
 
-with open('pos.txt') as f:
+with open('/home/gama/code/semantic-descriptor/slam/data.txt') as f:
+# with open('pos.txt') as f:
     lines = f.readlines()
 
 _WIDTH = 512
@@ -33,23 +34,36 @@ idx = 0
 max_x = 100
 max_y = 100
 max_z = 100
+roll = 0
+pitch = 0
+yaw = 0
+
+x_ant = 0
+y_ant = 0
+z_ant = 0
 
 for line in lines:
-    match = re.match(r"x:([-]?\d*\.\d+), y:([-]?\d*\.\d+), z:([-]?\d*\.\d+), roll:([-]?\d*\.\d+), pitch:([-]?\d*\.\d+), yaw:([-]?\d*\.\d+)", line)
-
+    # match = re.match(r"x:([-]?\d*\.\d+), y:([-]?\d*\.\d+), z:([-]?\d*\.\d+), roll:([-]?\d*\.\d+), pitch:([-]?\d*\.\d+), yaw:([-]?\d*\.\d+)", line)
+    match = re.match(r"([-]?\d*\.\d+), ([-]?\d*\.\d+), ([-]?\d*\.\d+)", line)
+    # print(idx)
     x = float(match.group(1))
     y = float(match.group(2))
     z = float(match.group(3))
+    
+    # roll = float(match.group(4))
+    # pitch = float(match.group(5))
+    # yaw = float(match.group(6))
 
-    roll = float(match.group(4))
-    pitch = float(match.group(5))
-    yaw = float(match.group(6))
+    # position[idx] = [x ,y ,z ,roll, pitch, yaw]
+    position[idx] = [x + x_ant,y + y_ant,z + z_ant,roll, pitch, yaw]
 
-    position[idx] = [x,y,z,roll, pitch, yaw]
+    x_ant += x
+    y_ant += y
+    z_ant += z
 
-    max_x = max(max_x, abs(x - position[0][0]))
-    max_y = max(max_y, abs(y - position[0][1]))
-    max_z = max(max_z, abs(z))
+    # max_x = max(max_x, abs(x - position[0][0]))
+    # max_y = max(max_y, abs(y - position[0][1]))
+    # max_z = max(max_z, abs(z))
 
 
     

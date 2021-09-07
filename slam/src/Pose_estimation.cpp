@@ -52,20 +52,20 @@ void Pose_estimation::pose_estimation_2d2d(const vector<KeyPoint> &keypoints1, c
     Timer t5 = chrono::steady_clock::now();
 
     /* Results */
-    printElapsedTime("Pose estimation 2D-2D: ", t1, t5);
-    printElapsedTime(" | Fundamental Matrix Calculation: ", t1, t2);
-    printElapsedTime(" |   Essential Matrix Calculation: ", t2, t3);
-    printElapsedTime(" |  Homography Matrix Calculation: ", t3, t4);
-    printElapsedTime(" |             Pose Recover(R, t): ", t4, t5);
-    cout << endl;
+    // printElapsedTime("Pose estimation 2D-2D: ", t1, t5);
+    // printElapsedTime(" | Fundamental Matrix Calculation: ", t1, t2);
+    // printElapsedTime(" |   Essential Matrix Calculation: ", t2, t3);
+    // printElapsedTime(" |  Homography Matrix Calculation: ", t3, t4);
+    // printElapsedTime(" |             Pose Recover(R, t): ", t4, t5);
+    // cout << endl;
 
-    printMatrix("K:\n", K);
-    printMatrix("F:\n", F);
-    printMatrix("E:\n", E);
-    printMatrix("H:\n", H);
+    // printMatrix("K:\n", K);
+    // printMatrix("F:\n", F);
+    // printMatrix("E:\n", E);
+    // printMatrix("H:\n", H);
 
-    printMatrix("R:\n", R);
-    printMatrix("t:\n", t);
+    // printMatrix("R:\n", R);
+    // printMatrix("t:\n", t);
 }
 
 Mat Pose_estimation::vee2hat(const Mat &var){
