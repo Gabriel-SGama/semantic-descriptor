@@ -32,7 +32,7 @@ const int PATCH_SIZE = 31;
 const int HALF_PATCH_SIZE = 24;
 // const float factorPI = CV_PI/180.0;
 
-const double matches_lower_bound = 30.0;
+const double matches_lower_bound = 45.0;
 
 /* ====== */
 /*  Main  */
@@ -65,26 +65,30 @@ int main(int argc, char **argv) {
     Mat descriptors1, descriptors2, sem_descriptor1, sem_descriptor2;
 
     Ptr<FeatureDetector> detector = ORB::create(nfeatures);
-    // Ptr<DescriptorExtractor> descriptor = ORB::create(nfeatures);
+    Ptr<DescriptorExtractor> descriptor = ORB::create(nfeatures);
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
     
     VideoCapture cap("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_camera.avi"); 
-    if(!cap.isOpened()){
+    VideoCapture cap_seg("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_seg.avi"); 
+    
+    if(!cap.isOpened() || !cap_seg.isOpened()){
         cout << "Error opening video stream or file" << endl;
         return -1;
     }
+
     int frameid = 0;
-    cap.read(image1);
 
     while(cap.isOpened()){
         frameid++;
 
         if(frameid < 150){
             cap.read(image1);
+            cap_seg.read(semantic1);
             continue;
         }
         
         cap.read(image2);
+        cap_seg.read(semantic2);
 
         cvtColor(image1, image_gray1, COLOR_BGR2GRAY);
         cvtColor(image2, image_gray2, COLOR_BGR2GRAY);
@@ -92,33 +96,35 @@ int main(int argc, char **argv) {
         detector->detect(image_gray1, keypoints1);
         detector->detect(image_gray2, keypoints2);
 
-        orbFeatures->computeDesc(image_gray1, keypoints1, sem_descriptor1);
-        orbFeatures->computeDesc(image_gray2, keypoints2, sem_descriptor2);
+        Timer t1 = chrono::steady_clock::now();
+        descriptor->compute(image_gray1, keypoints1, sem_descriptor1);
+        descriptor->compute(image_gray2, keypoints2, sem_descriptor2);
+        Timer t2 = chrono::steady_clock::now();
+
+        Timer t3 = chrono::steady_clock::now();
+        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
+        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
+        Timer t4 = chrono::steady_clock::now();
+        printElapsedTime("normal desc: ", t1, t2);
+        printElapsedTime("sem desc: ", t3, t4);
 
         vector<DMatch> matches;
-        matcher->match(sem_descriptor1, sem_descriptor2, matches);
-        
+        // matcher->match(sem_descriptor1, sem_descriptor2, matches);
+        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
         auto min_max = minmax_element(matches.begin(), matches.end(), [](const DMatch &m1, const DMatch &m2){
-            //cout << m1.distance << " " << m2.distance << endl;
             return m1.distance < m2.distance;
         });
 
         double min_dist = min_max.first->distance;
         double max_dist = min_max.second->distance;
 
-        /* Perform Filtering */
-        // Rule of Thumb: When the distance between the descriptors is greater than 2 times the min distance, we treat the matching
-        // as wrong. But sometimes the min distance could be very small, set an experience value of 30 as the lower bound.
         vector<DMatch> goodMatches;
 
-        Timer t7 = chrono::steady_clock::now();
         for (int i=0; i<sem_descriptor1.rows; i++){
-            // cout << matches[i].distance << endl;
             if (matches[i].distance <= max(2*min_dist, matches_lower_bound)){
                 goodMatches.push_back(matches[i]);
             }
         }
-        Timer t8 = chrono::steady_clock::now();
 
         //--- Step 5: Visualize the Matching result
         Mat outImage1, outImage2;
@@ -202,9 +208,10 @@ int main(int argc, char **argv) {
         imshow("image_matches", image_matches);
         imshow("image_goodMatches", image_goodMatches);
         // cout << "\nPress 'ESC' to exit the program..." << endl;
-        waitKey(1);
+        waitKey(0);
 
         image1 = image2.clone();
+        semantic1 = semantic2.clone();
     }
     return 0;
 }

@@ -24,10 +24,10 @@ CC_FLAGS_DEBUG = -g \
 		   		 -c \
 				 -msse4
 
-# DEBUG ?= 1
-# ifeq ($(DEBUG), 1)
-#     CC_FLAGS +=-Wall -g
-# endif
+DEBUG ?= 1
+ifeq ($(DEBUG), 1)
+    CC_FLAGS +=-Wall -g
+endif
 
 # Command used at clean target
 RM = rm -rf
