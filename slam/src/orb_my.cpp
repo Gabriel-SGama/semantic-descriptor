@@ -27,12 +27,11 @@ string semantic2_filepath = "../carlaData/semantic/id00045.png";
 
 const int nfeatures = 500;
 const int nrBrief = 256;
-const int nSemrBrief = 48;
 const int PATCH_SIZE = 31;
 const int HALF_PATCH_SIZE = 24;
 // const float factorPI = CV_PI/180.0;
 
-const double matches_lower_bound = 45.0;
+const double matches_lower_bound = 30.0;
 
 /* ====== */
 /*  Main  */
@@ -102,16 +101,18 @@ int main(int argc, char **argv) {
         Timer t2 = chrono::steady_clock::now();
 
         Timer t3 = chrono::steady_clock::now();
-        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
-        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
+        // orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
+        // orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
         Timer t4 = chrono::steady_clock::now();
         printElapsedTime("normal desc: ", t1, t2);
         printElapsedTime("sem desc: ", t3, t4);
 
-        vector<DMatch> matches;
-        // matcher->match(sem_descriptor1, sem_descriptor2, matches);
-        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
-        auto min_max = minmax_element(matches.begin(), matches.end(), [](const DMatch &m1, const DMatch &m2){
+        // vector<DMatch> matches;
+        vector<DMatch> sem_matches;
+        matcher->match(sem_descriptor1, sem_descriptor2, sem_matches);
+        // orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, sem_matches);
+        
+        auto min_max = minmax_element(sem_matches.begin(), sem_matches.end(), [](const DMatch &m1, const DMatch &m2){
             return m1.distance < m2.distance;
         });
 
@@ -121,8 +122,8 @@ int main(int argc, char **argv) {
         vector<DMatch> goodMatches;
 
         for (int i=0; i<sem_descriptor1.rows; i++){
-            if (matches[i].distance <= max(2*min_dist, matches_lower_bound)){
-                goodMatches.push_back(matches[i]);
+            if (sem_matches[i].distance <= max(2*min_dist, matches_lower_bound)){
+                goodMatches.push_back(sem_matches[i]);
             }
         }
 
@@ -135,23 +136,23 @@ int main(int argc, char **argv) {
         drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
         drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
         
-        drawMatches(image1, keypoints1, image2, keypoints2, matches, image_matches,
+        drawMatches(image1, keypoints1, image2, keypoints2, sem_matches, image_matches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         drawMatches(image1, keypoints1, image2, keypoints2, goodMatches, image_goodMatches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
         // /* Results */
-        cout << "-- Number of matches: " << matches.size() << endl << endl;
+        cout << "-- Number of matches: " << sem_matches.size() << endl << endl;
         
         cout << "-- Min dist: " << min_dist << endl;
         cout << "-- Max dist: " << max_dist << endl;
         cout << "-- Number of good matches: " << goodMatches.size() << endl << endl;
-        cout << "In total, we get " << goodMatches.size() << "/" << matches.size() << " good pairs of feature points." << endl << endl;
+        cout << "In total, we get " << goodMatches.size() << "/" << sem_matches.size() << " good pairs of feature points." << endl << endl;
 
         Mat K = (Mat_<double>(3, 3) << 256.0, 0, 256.0, 0, 256.0, 256.0, 0, 0, 1.0);
         Mat R,t;
         pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
-
+        pose_estimation->updateMap2d(R,t);
         // printMatrix("R_total_1:\n", R_total);
         
         Mat t_rot = R_total*t;
@@ -160,10 +161,7 @@ int main(int argc, char **argv) {
         R_total = R_total*R;
         // printMatrix("R_total:\n", R_total);
 
-        outdata << setprecision(6) << (float)t_rot.at<double>(0,0) << ", ";
-        outdata << setprecision(6) << (float)t_rot.at<double>(1,0) << ", ";
-        outdata << setprecision(6) << (float)t_rot.at<double>(2,0) << endl;
-
+      
         string flag;
         Mat t_hat = pose_estimation->vee2hat(t);
         int counter = 0;
@@ -200,15 +198,15 @@ int main(int argc, char **argv) {
         // imshow("semantic2", semantic2);
 
         //output
-        imshow("outImage1", outImage1);
-        imshow("outImage2", outImage2);
+        // imshow("outImage1", outImage1);
+        // imshow("outImage2", outImage2);
 
         // imshow("outImage_gray1", outImage_gray1);
         // imshow("outImage_gray2", outImage_gray2);
-        imshow("image_matches", image_matches);
+        // imshow("image_matches", image_matches);
         imshow("image_goodMatches", image_goodMatches);
         // cout << "\nPress 'ESC' to exit the program..." << endl;
-        waitKey(0);
+        waitKey(1);
 
         image1 = image2.clone();
         semantic1 = semantic2.clone();

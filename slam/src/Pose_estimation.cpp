@@ -7,6 +7,13 @@ using namespace cv;
 
 Pose_estimation::Pose_estimation()
 {
+    R_total = (Mat_<double>(3,3) <<
+                        1, 0, 0,
+                        0, 1, 0,
+                        0 ,0 ,1);
+
+    map = Mat::zeros(512, 512, CV_8UC1);
+    translations.push_back(Mat::zeros(3, 1, CV_64FC1));
 }
 
 
@@ -32,24 +39,24 @@ void Pose_estimation::pose_estimation_2d2d(const vector<KeyPoint> &keypoints1, c
     cout << endl;
 
     //--- Calculate the Fundamental Matrix
-    Timer t1 = chrono::steady_clock::now();
+    // Timer t1 = chrono::steady_clock::now();
     Mat F = findFundamentalMat(points1, points2, cv::FM_8POINT);  // 8-Points Algorithm
-    Timer t2 = chrono::steady_clock::now();
+    // Timer t2 = chrono::steady_clock::now();
 
     //--- Calculate the Essential Matrix
     Mat E = findEssentialMat(points1, points2, focal_length, principal_point);  // Remember: E = t^*R = K^T*F*K, Essential matrix needs intrinsics info.
-    Timer t3 = chrono::steady_clock::now();
+    // Timer t3 = chrono::steady_clock::now();
 
     //--- Calculate the Homography Matrix
     //--- But the scene in this example is not flat, and then Homography matrix has little meaning.
     Mat H = findHomography(points1, points2, RANSAC, 3);
-    Timer t4 = chrono::steady_clock::now();
+    // Timer t4 = chrono::steady_clock::now();
 
     //--- Restore Rotation and Translation Information from the Essential Matrix, E = t^*R
     // In this program, OpenCV will use triangulation to detect whether the detected point’s depth is positive to select the correct solution.
     // This function is only available in OpenCV3!
     recoverPose(E, points1, points2, R, t, focal_length, principal_point);
-    Timer t5 = chrono::steady_clock::now();
+    // Timer t5 = chrono::steady_clock::now();
 
     /* Results */
     // printElapsedTime("Pose estimation 2D-2D: ", t1, t5);
@@ -77,4 +84,35 @@ Mat Pose_estimation::vee2hat(const Mat &var){
     //printMatrix("var_hat:", var_hat);
 
     return var_hat;
+}
+
+
+void Pose_estimation::updateMap2d(const Mat &R,const Mat &t){
+    int _SIZE = 512;
+
+    map.setTo(Scalar::all(0));
+
+    R_total = R_total*R;
+    Mat t_rot = R_total*t;
+
+    translations.push_back(t_rot + translations.back());
+
+    double x=0, y=0, z=0;
+
+    double max_x=100, max_y=100;
+    
+    for (auto &curr_t: translations){
+        x = curr_t.at<double>(0,0);
+        y = curr_t.at<double>(0,1);
+
+        max_x = max(max_x, x);
+        max_y = max(max_y, y);
+
+        circle(map, Point2f((int)x*_SIZE/(3*max_x) + _SIZE/2,(int)y*_SIZE/(3*max_y) + _SIZE/2),
+                1, 255, FILLED);
+
+    }
+
+    imshow("map", map);
+    // waitKey(1);
 }
