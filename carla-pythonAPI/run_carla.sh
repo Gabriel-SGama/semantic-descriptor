@@ -1,2 +1,2 @@
 cd /opt/carla-simulator
-./CarlaUE4.sh -vulkan
+./CarlaUE4.sh

@@ -307,10 +307,31 @@ class BasicSynchronousClient(object):
 			self.semantic = i2
 			cv2.imshow("semantic_image", self.semantic)
 
-	def save(self, count, video_out, file_ptr):
+	def save(self, count, video_out, file_ptr, ini):
+		
 		pos = self.car.get_transform()
+		
+		phi = pos.rotation.roll
+		theta = pos.rotation.pitch
+		psi = pos.rotation.yaw
+
+		r11 = np.cos(phi)*np.cos(theta)
+		r12 = np.cos(phi)*np.sin(theta)*np.sin(psi) - np.sin(theta)*np.cos(psi)
+		r13 = np.cos(phi)*np.sin(theta)*np.cos(psi) + np.sin(theta)*np.cos(psi)
+		tx = pos.location.x - ini[0]
+		r21 = np.sin(phi)*np.cos(theta)
+		r22 = np.sin(phi)*np.sin(theta)*np.sin(psi) + np.cos(theta)*np.cos(psi)
+		r23 = np.sin(phi)*np.sin(theta)*np.cos(psi) - np.cos(theta)*np.sin(psi)
+		ty = pos.location.y - ini[1]
+		r31 = -np.sin(theta)
+		r32 = np.cos(theta)*np.sin(psi)
+		r33 = np.cos(theta)*np.cos(psi)
+		tz = pos.location.z - ini[2]
+		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} \n" .format(
+			r11,r12,r13,tx,r21,r22,r23,ty,r31,r32,r33,tz)
+
 		# str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
-		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
+		# str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
 		file_ptr.write(str_pos)
 		
 		if self.image is not None:
@@ -391,15 +412,21 @@ class BasicSynchronousClient(object):
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
 			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
-			out_camera = cv2.VideoWriter('out_camera2.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_camera = cv2.VideoWriter('out_camera_kitti.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
 			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
-			out_seg = cv2.VideoWriter('out_seg2.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+			out_seg = cv2.VideoWriter('out_seg_kitti.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
 
 			fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
-			out_depth = cv2.VideoWriter('out_depth2.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			file_ptr = open("pos2.txt", 'w')
+			file_ptr = open("pos_kitti.txt", 'w')
+
+			pos = self.car.get_transform()
+			ini_x = pos.location.x
+			ini_y = pos.location.y
+			ini_z = pos.location.z
+			ini = [ini_x, ini_y, ini_z]
 
 			while True:
 				self.world.tick()
@@ -412,7 +439,7 @@ class BasicSynchronousClient(object):
 				self.semantic_render(self.semantic_display, count)
 				# if(not (count % 4)):
 
-				self.save(count, out_camera, file_ptr)
+				self.save(count, out_camera, file_ptr, ini)
 				self.depth_save(count, out_depth)
 				self.semantic_save(count, out_seg)
 				pygame.display.flip()
