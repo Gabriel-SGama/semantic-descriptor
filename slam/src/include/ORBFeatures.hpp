@@ -286,7 +286,7 @@ private:
 
 public:
 
-    ORBFeatures(int maxFeatures = 500, int nrBrief = 256, int nSemrBrief = 24, int patch_size = 31, int half_patch_size = 15, float matches_lower_bound = 45.0);
+    ORBFeatures(int maxFeatures = 500, int nrBrief = 256, int nSemrBrief = 24, int patch_size = 31, int half_patch_size = 15, float matches_lower_bound = 30.0);
 
     void computeDesc(const cv::Mat &img, const cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
     void computeSemanticDesc(const cv::Mat &sem_img, const std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);

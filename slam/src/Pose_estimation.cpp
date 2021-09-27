@@ -14,6 +14,59 @@ Pose_estimation::Pose_estimation()
 
     map = Mat::zeros(512, 512, CV_8UC1);
     translations.push_back(Mat::zeros(3, 1, CV_64FC1));
+    textMapPath = "../carla-pythonAPI/pos2.txt";
+    mapFilePtr.open(textMapPath);
+
+    float x, ini_x, max_x = 100;
+    float y, ini_y, max_y = 100;
+    float z;
+    float row;
+    float pitch;
+    float yaw;
+    
+    int nlines = count(istreambuf_iterator<char>(mapFilePtr), 
+             istreambuf_iterator<char>(), '\n');
+
+
+    float (*pos)[6] = new float[nlines][6];
+
+    mapFilePtr.clear();
+    mapFilePtr.seekg(0);
+    mapFilePtr >> x >> y >> z >> row >> pitch >> yaw;
+
+    for(int idx = 0; idx < nlines; idx++){
+        
+
+        pos[idx][0] = x;
+        pos[idx][1] = y;
+        pos[idx][2] = z;
+
+        cout  << idx << " | " << x << " | " << pos[idx][0] << endl;
+
+        max_x = max(max_x, abs(x-pos[0][0]));
+        max_y = max(max_y, abs(y-pos[0][1]));
+
+        mapFilePtr >> x >> y >> z >> row >> pitch >> yaw;
+        mapFilePtr.get();
+    }
+
+    mapFilePtr.close();
+    
+    ini_x = pos[0][0];
+    ini_y = pos[0][1];
+
+    for (int i = 0; i < nlines; i++){
+        x = pos[i][0];
+        y = pos[i][1];
+        // cout << x << endl;
+        // cout << y << endl;
+
+        circle(map, Point2i((int((x-ini_x)*(512/(2.5*max_x)) + 512/2)), int((y-ini_y)*(512/(2.5*max_y))+ 512/2)), 1, 255, FILLED);
+    }
+    
+    imshow("map", map);
+    cv::waitKey(0);
+
 }
 
 
@@ -55,7 +108,7 @@ void Pose_estimation::pose_estimation_2d2d(const vector<KeyPoint> &keypoints1, c
     //--- Restore Rotation and Translation Information from the Essential Matrix, E = t^*R
     // In this program, OpenCV will use triangulation to detect whether the detected point’s depth is positive to select the correct solution.
     // This function is only available in OpenCV3!
-    recoverPose(E, points1, points2, R, t, focal_length, principal_point);
+    cv::recoverPose(E, points1, points2, R, t, focal_length, principal_point);
     // Timer t5 = chrono::steady_clock::now();
 
     /* Results */

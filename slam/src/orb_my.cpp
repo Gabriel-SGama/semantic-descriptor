@@ -17,18 +17,7 @@ using std::ofstream;
 using namespace std;
 using namespace cv;
 
-/* Global Variables */
-string image1_filepath = "../carlaData/image/id00044.png";
-string image2_filepath = "../carlaData/image/id00045.png";
-
-string semantic1_filepath = "../carlaData/semantic/id00044.png";
-string semantic2_filepath = "../carlaData/semantic/id00045.png";
-
-
 const int nfeatures = 500;
-const int nrBrief = 256;
-const int PATCH_SIZE = 31;
-const int HALF_PATCH_SIZE = 24;
 // const float factorPI = CV_PI/180.0;
 
 const double matches_lower_bound = 30.0;
@@ -43,11 +32,6 @@ int main(int argc, char **argv) {
     
     ofstream outdata;
     outdata.open("data.txt");
-
-    Mat R_total = (Mat_<double>(3,3) <<
-                         1, 0, 0,
-                         0, 1, 0,
-                         0 ,0 ,1);
 
     ORBFeatures *orbFeatures = new ORBFeatures();
     Pose_estimation *pose_estimation = new Pose_estimation();
@@ -76,18 +60,31 @@ int main(int argc, char **argv) {
     }
 
     int frameid = 0;
+    bool read_flag = true;
 
     while(cap.isOpened()){
         frameid++;
 
-        if(frameid < 150){
+        if(frameid < _OFFSET_IN_VID){
             cap.read(image1);
             cap_seg.read(semantic1);
             continue;
         }
         
+        
         cap.read(image2);
         cap_seg.read(semantic2);
+        
+        image1 = image2.clone();
+        semantic1 = semantic2.clone();
+            
+        for(int k = 0; k < _FRAMES_JUMPS; k++){
+            read_flag = cap.read(image2);
+            cap_seg.read(semantic2);
+        }
+
+        if(!read_flag)
+            break;
 
         cvtColor(image1, image_gray1, COLOR_BGR2GRAY);
         cvtColor(image2, image_gray2, COLOR_BGR2GRAY);
@@ -96,21 +93,21 @@ int main(int argc, char **argv) {
         detector->detect(image_gray2, keypoints2);
 
         Timer t1 = chrono::steady_clock::now();
-        descriptor->compute(image_gray1, keypoints1, sem_descriptor1);
-        descriptor->compute(image_gray2, keypoints2, sem_descriptor2);
+        // descriptor->compute(image_gray1, keypoints1, sem_descriptor1);
+        // descriptor->compute(image_gray2, keypoints2, sem_descriptor2);
         Timer t2 = chrono::steady_clock::now();
 
         Timer t3 = chrono::steady_clock::now();
-        // orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
-        // orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
+        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
+        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
         Timer t4 = chrono::steady_clock::now();
         printElapsedTime("normal desc: ", t1, t2);
         printElapsedTime("sem desc: ", t3, t4);
 
         // vector<DMatch> matches;
         vector<DMatch> sem_matches;
-        matcher->match(sem_descriptor1, sem_descriptor2, sem_matches);
-        // orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, sem_matches);
+        // matcher->match(sem_descriptor1, sem_descriptor2, sem_matches);
+        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, sem_matches);
         
         auto min_max = minmax_element(sem_matches.begin(), sem_matches.end(), [](const DMatch &m1, const DMatch &m2){
             return m1.distance < m2.distance;
@@ -153,14 +150,6 @@ int main(int argc, char **argv) {
         Mat R,t;
         pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
         pose_estimation->updateMap2d(R,t);
-        // printMatrix("R_total_1:\n", R_total);
-        
-        Mat t_rot = R_total*t;
-        // printMatrix("t_total:\n", t_rot);
-        
-        R_total = R_total*R;
-        // printMatrix("R_total:\n", R_total);
-
       
         string flag;
         Mat t_hat = pose_estimation->vee2hat(t);
@@ -205,11 +194,15 @@ int main(int argc, char **argv) {
         // imshow("outImage_gray2", outImage_gray2);
         // imshow("image_matches", image_matches);
         imshow("image_goodMatches", image_goodMatches);
-        // cout << "\nPress 'ESC' to exit the program..." << endl;
-        waitKey(1);
+        waitKey(2);
 
         image1 = image2.clone();
         semantic1 = semantic2.clone();
     }
+
+    waitKey(0);
+    cout << "\nPress 'ESC' to exit the program..." << endl;
+    
+    
     return 0;
 }

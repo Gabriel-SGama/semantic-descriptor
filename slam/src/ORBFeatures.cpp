@@ -28,10 +28,6 @@ ORBFeatures::ORBFeatures(int maxFeatures, int nrBrief, int nSemrBrief, int patch
         imagePyramidScale[i] = imagePyramidScale[i-1]/scaleFactor;
     }
     
-    // for(int i = 0; i < nLevels; i++){
-    //     imagePyramidScale[i] = (float)pow(scaleFactor, i);
-    // }
-    
 }
 
 
@@ -68,17 +64,17 @@ void ORBFeatures::createPyramid(const Mat img, vector<Mat> &pyramid){
 void ORBFeatures::computeDesc(const Mat &img, const Mat &sem_img, vector<KeyPoint> &keypoints, Mat &descriptor){
     
     createPyramid(img, imagePyramid);
-    createPyramid(sem_img, sem_imagePyramid);
+    // createPyramid(sem_img, sem_imagePyramid);
     
     for(int i = 0; i < nLevels; i++){
         GaussianBlur(imagePyramid[i], imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
-        GaussianBlur(sem_imagePyramid[i], sem_imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
+        // GaussianBlur(sem_imagePyramid[i], sem_imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
     }
     
     if(descriptor.data != nullptr)
         descriptor.setTo(Scalar::all(0));
     else
-        descriptor = Mat::zeros(keypoints.size(), nrBrief/32 + nSemrBrief/6, CV_32SC1);
+        descriptor = Mat::zeros(keypoints.size(), nrBrief/32 /*+ nSemrBrief/6*/, CV_32SC1);
     // descriptor.create(500, 32, CV_8UC1);
     
     
@@ -116,20 +112,20 @@ void ORBFeatures::computeDesc(const Mat &img, const Mat &sem_img, vector<KeyPoin
             descriptor.at<u_int32_t>(count_kp, i) = desc;
         }
     
-        center = &sem_imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*scale), cvRound(kp.pt.x*scale));
-        step = (int)sem_imagePyramid[kp.octave].step;
+        // center = &sem_imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*scale), cvRound(kp.pt.x*scale));
+        // step = (int)sem_imagePyramid[kp.octave].step;
 
         // semantic desc
-        for(int i = 0; i < nSemrBrief/6; i++){
-            sem_desc = 0;
-            int idx = i*6*2;
+        // for(int i = 0; i < nSemrBrief/6; i++){
+        //     sem_desc = 0;
+        //     int idx = i*6*2;
 
-            for(int pt = 0; pt < 6*2; pt+=2){
-                sem_desc |= GET_VALUE(idx + pt) << (pt*3);
-            }
+        //     for(int pt = 0; pt < 6*2; pt+=2){
+        //         sem_desc |= GET_VALUE(idx + pt) << (pt*3);
+        //     }
 
-            descriptor.at<u_int32_t>(count_kp, nrBrief/32 + i) = sem_desc;
-        }
+        //     descriptor.at<u_int32_t>(count_kp, nrBrief/32 + i) = sem_desc;
+        // }
         count_kp++;
     
     }
@@ -143,22 +139,22 @@ void ORBFeatures::matchDesc(Mat &descriptor1, Mat &descriptor2, vector<DMatch> &
     // const int d_max = 40;
     
     for (int i1 = 0; i1 < descriptor1.rows; ++i1) {
-        cv::DMatch m{i1, 0, 0, 256};
+        cv::DMatch m{i1, 0, 256};
 
         for (int i2 = 0; i2 < descriptor2.rows; ++i2) {
 
             int distance = 0;
 
             for (int k = 0; k < nrBrief/32; k++) {
-                distance += _mm_popcnt_u32((uint32_t)(descriptor1.at<int32_t>(i1,k) ^ descriptor2.at<int32_t>(i2,k)));
+                distance += _mm_popcnt_u32((uint32_t)(descriptor1.at<u_int32_t>(i1,k) ^ descriptor2.at<u_int32_t>(i2,k)));
             }
 
-            for (int j = nrBrief/32; j < nrBrief/32 + nSemrBrief/6; j++) {
-                for (int k = 0; k < 6; k++) {
-                    // cout << ((int)((descriptor1.at<int32_t>(i1,j) >> k*6 ^ descriptor1.at<int32_t>(i2,j) >> k*6) & 63) ? 8 : 0) << endl;
-                    distance += (((descriptor1.at<uint32_t>(i1,j) ^ descriptor2.at<uint32_t>(i2,j)) >> k*6) & 63) ? 6 : 0;
-                }
-            }
+            // for (int j = nrBrief/32; j < nrBrief/32 + nSemrBrief/6; j++) {
+            //     for (int k = 0; k < 6; k++) {
+            //         // cout << ((int)((descriptor1.at<int32_t>(i1,j) >> k*6 ^ descriptor1.at<int32_t>(i2,j) >> k*6) & 63) ? 8 : 0) << endl;
+            //         distance += (((descriptor1.at<uint32_t>(i1,j) ^ descriptor2.at<uint32_t>(i2,j)) >> k*6) & 63) ? 6 : 0;
+            //     }
+            // }
             // if (distance < d_max && distance < m.distance) {
             if (distance < m.distance) {
                 m.distance = distance;

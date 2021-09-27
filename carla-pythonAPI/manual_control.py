@@ -309,7 +309,8 @@ class BasicSynchronousClient(object):
 
 	def save(self, count, video_out, file_ptr):
 		pos = self.car.get_transform()
-		str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
+		# str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
+		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
 		file_ptr.write(str_pos)
 		
 		if self.image is not None:
@@ -390,15 +391,15 @@ class BasicSynchronousClient(object):
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
 			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
-			out_camera = cv2.VideoWriter('out_camera.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_camera = cv2.VideoWriter('out_camera2.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
 			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
-			out_seg = cv2.VideoWriter('out_seg.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+			out_seg = cv2.VideoWriter('out_seg2.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
 
 			fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
-			out_depth = cv2.VideoWriter('out_depth.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_depth = cv2.VideoWriter('out_depth2.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			file_ptr = open("pos.txt", 'w')
+			file_ptr = open("pos2.txt", 'w')
 
 			while True:
 				self.world.tick()
