@@ -13,7 +13,13 @@ Pose_estimation::Pose_estimation()
                         0 ,0 ,1);
 
     map = Mat::zeros(512, 512, CV_8UC1);
+    
     translations.push_back(Mat::zeros(3, 1, CV_64FC1));
+   
+    dataEvoPath = "../carla-pythonAPI/mapGen.txt";
+    dataEvoPtr.open(dataEvoPath);
+    
+    /*
     textMapPath = "../carla-pythonAPI/pos2.txt";
     mapFilePtr.open(textMapPath);
 
@@ -66,7 +72,7 @@ Pose_estimation::Pose_estimation()
     
     imshow("map", map);
     cv::waitKey(0);
-
+    */
 }
 
 
@@ -148,24 +154,54 @@ void Pose_estimation::updateMap2d(const Mat &R,const Mat &t){
     R_total = R_total*R;
     Mat t_rot = R_total*t;
 
-    translations.push_back(t_rot + translations.back());
+    double* ptr = &R_total.at<double>(0,0);
+
+    
+    Mat t_result = t_rot + translations.back();
+
+    dataEvoPtr << fixed << setprecision(4) << (float)ptr[0] << " " << 
+                (float)ptr[1] << " " <<
+                (float)ptr[2] << " " <<
+                (float)t_result.at<double>(0,0) << " " <<
+                (float)ptr[3] << " " <<
+                (float)ptr[4] << " " <<
+                (float)ptr[5] << " " <<
+                (float)t_result.at<double>(0,1) << " " <<
+                (float)ptr[6] << " " <<
+                (float)ptr[7] << " " <<
+                (float)ptr[8] << " " <<
+                (float)t_result.at<double>(0,2) << "\n";
+
+
+    translations.push_back(t_result);
 
     double x=0, y=0, z=0;
 
-    double max_x=100, max_y=100;
+    static double max_x=10, max_y=10;
     
+    double x_ini = 0, y_ini = 0;
+
     for (auto &curr_t: translations){
         x = curr_t.at<double>(0,0);
-        y = curr_t.at<double>(0,1);
+        y = curr_t.at<double>(0,2);
 
-        max_x = max(max_x, x);
-        max_y = max(max_y, y);
+        max_x = max(max_x, abs(x));
+        max_y = max(max_y, abs(y));
 
-        circle(map, Point2f((int)x*_SIZE/(3*max_x) + _SIZE/2,(int)y*_SIZE/(3*max_y) + _SIZE/2),
-                1, 255, FILLED);
+        line(map,Point2f((int)x_ini*_SIZE/(3*max_x) + _SIZE/2,(int)y_ini*_SIZE/(3*max_y) + _SIZE/2), Point2f((int)x*_SIZE/(3*max_x) + _SIZE/2,(int)y*_SIZE/(3*max_y) + _SIZE/2), 255);
+        // circle(map, Point2f((int)x*_SIZE/(3*max_x) + _SIZE/2,(int)y*_SIZE/(3*max_y) + _SIZE/2),
+                // 1, 255, FILLED);
+
+        x_ini = x;
+        y_ini = y;
 
     }
 
     imshow("map", map);
     // waitKey(1);
+}
+
+
+void Pose_estimation::closeFiles(){
+    dataEvoPtr.close();
 }

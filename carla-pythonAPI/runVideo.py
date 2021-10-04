@@ -28,8 +28,8 @@
 import cv2 
 
 # Create a video capture object, in this case we are reading the video from a file
-vid_capture = cv2.VideoCapture('out_camera.avi')
-vid_seg = cv2.VideoCapture('out_seg.avi')
+vid_capture = cv2.VideoCapture('out_camera_kitti_test.avi')
+vid_seg = cv2.VideoCapture('out_seg_kitti_test.avi')
 
 if (vid_capture.isOpened() == False or vid_seg.isOpened() == False):
 	print("Error opening the video file")

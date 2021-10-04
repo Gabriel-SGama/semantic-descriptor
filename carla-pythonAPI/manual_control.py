@@ -287,11 +287,12 @@ class BasicSynchronousClient(object):
 	def depth_render(self, depth_display, count):	
 		if self.depth_image is not None:
 			# self.depth_image.save_to_disk("../carlaData/depth/depth" + str(count) + ".png")
-			i = np.array(self.depth_image.raw_data)
-			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
-			i3 = i2[:, :, :3]
+			#i = np.array(self.depth_image.raw_data)
+			i = np.array(self.depth_image)
+			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 1))
+			i3 = i2[:, :, :]
 			self.depth = i3
-			cv2.imshow("depth_image", self.depth)
+			#cv2.imshow("depth_image", self.depth)
 
 	def semantic_render(self, semantic_display, count):
 		if self.semantic_image is not None:
@@ -327,7 +328,7 @@ class BasicSynchronousClient(object):
 		r32 = np.cos(theta)*np.sin(psi)
 		r33 = np.cos(theta)*np.cos(psi)
 		tz = pos.location.z - ini[2]
-		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} \n" .format(
+		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n" .format(
 			r11,r12,r13,tx,r21,r22,r23,ty,r31,r32,r33,tz)
 
 		# str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
@@ -352,10 +353,10 @@ class BasicSynchronousClient(object):
 	
 	def semantic_save(self, count, video_out):
 		if self.semantic_image is not None:
-			self.semantic_image = np.array(self.semantic_image.raw_data)
-			self.semantic_image = self.semantic_image.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
-			self.semantic_image = self.semantic_image[:,:,2]
-			video_out.write(self.semantic_image)
+			semantic_save = np.array(self.semantic_image.raw_data)
+			semantic_save = semantic_save.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
+			semantic_save = semantic_save[:,:,2]
+			video_out.write(semantic_save)
 			# self.semantic_image.save_to_disk("../carlaData/semantic/id%05d.png" % count)
 			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
 			# self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
@@ -393,11 +394,11 @@ class BasicSynchronousClient(object):
 
 			self.setup_car()
 			self.setup_camera()
-			self.setup_depth_camera()
+			#self.setup_depth_camera()
 			self.setup_semantic_camera()
 
 			self.display = pygame.display.set_mode((VIEW_WIDTH, VIEW_HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
-			self.depth_display = cv2.namedWindow('depth_image')
+			#self.depth_display = cv2.namedWindow('depth_image')
 			self.semantic_display = cv2.namedWindow('semantic_image')
 
 			pygame_clock = pygame.time.Clock()
@@ -412,15 +413,15 @@ class BasicSynchronousClient(object):
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
 			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
-			out_camera = cv2.VideoWriter('out_camera_kitti.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_camera = cv2.VideoWriter('out_camera_kitti_test.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
 			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
-			out_seg = cv2.VideoWriter('out_seg_kitti.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+			out_seg = cv2.VideoWriter('out_seg_kitti_test.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
 
-			fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
-			out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			#fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
+			#out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			file_ptr = open("pos_kitti.txt", 'w')
+			file_ptr = open("pos_kitti_test.txt", 'w')
 
 			pos = self.car.get_transform()
 			ini_x = pos.location.x
@@ -431,16 +432,15 @@ class BasicSynchronousClient(object):
 			while True:
 				self.world.tick()
 				self.capture = True
-				self.depth_capture = True
+				#self.depth_capture = True
 				self.semantic_capture = True
 				pygame_clock.tick_busy_loop(30)
 				self.render(self.display, count)
-				self.depth_render(self.depth_display, count)
+				#self.depth_render(self.depth_display, count)
 				self.semantic_render(self.semantic_display, count)
-				# if(not (count % 4)):
 
 				self.save(count, out_camera, file_ptr, ini)
-				self.depth_save(count, out_depth)
+				#self.depth_save(count, out_depth)
 				self.semantic_save(count, out_seg)
 				pygame.display.flip()
 				pygame.event.pump()
@@ -455,7 +455,7 @@ class BasicSynchronousClient(object):
 			print(count)
 			self.set_synchronous_mode(False)
 			self.camera.destroy()
-			self.depth_camera.destroy()
+			#self.depth_camera.destroy()
 			self.semantic_camera.destroy()
 			self.car.destroy()
 			pygame.quit()

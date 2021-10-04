@@ -20,7 +20,7 @@ using namespace cv;
 const int nfeatures = 500;
 // const float factorPI = CV_PI/180.0;
 
-const double matches_lower_bound = 30.0;
+const double matches_lower_bound = 40.0;
 
 /* ====== */
 /*  Main  */
@@ -41,8 +41,8 @@ int main(int argc, char **argv) {
     Mat image_gray1;
     Mat image_gray2;
 
-    Mat semantic1;
-    Mat semantic2;
+    //Mat semantic1;
+    //Mat semantic2;
     
     vector<KeyPoint> keypoints1, keypoints2;
     Mat descriptors1, descriptors2, sem_descriptor1, sem_descriptor2;
@@ -51,10 +51,10 @@ int main(int argc, char **argv) {
     Ptr<DescriptorExtractor> descriptor = ORB::create(nfeatures);
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
     
-    VideoCapture cap("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_camera.avi"); 
-    VideoCapture cap_seg("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_seg.avi"); 
+    VideoCapture cap("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_camera_kitti.avi"); 
+    //VideoCapture cap_seg("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_seg.avi"); 
     
-    if(!cap.isOpened() || !cap_seg.isOpened()){
+    if(!cap.isOpened() /*|| !cap_seg.isOpened()*/){
         cout << "Error opening video stream or file" << endl;
         return -1;
     }
@@ -67,20 +67,20 @@ int main(int argc, char **argv) {
 
         if(frameid < _OFFSET_IN_VID){
             cap.read(image1);
-            cap_seg.read(semantic1);
+            //cap_seg.read(semantic1);
             continue;
         }
         
         
         cap.read(image2);
-        cap_seg.read(semantic2);
+        //cap_seg.read(semantic2);
         
         image1 = image2.clone();
-        semantic1 = semantic2.clone();
+        //semantic1 = semantic2.clone();
             
         for(int k = 0; k < _FRAMES_JUMPS; k++){
             read_flag = cap.read(image2);
-            cap_seg.read(semantic2);
+            //cap_seg.read(semantic2);
         }
 
         if(!read_flag)
@@ -98,8 +98,8 @@ int main(int argc, char **argv) {
         Timer t2 = chrono::steady_clock::now();
 
         Timer t3 = chrono::steady_clock::now();
-        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
-        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
+        orbFeatures->computeDesc(image_gray1, image_gray1/*semantic1*/, keypoints1, sem_descriptor1);
+        orbFeatures->computeDesc(image_gray2, image_gray2/*semantic2*/, keypoints2, sem_descriptor2);
         Timer t4 = chrono::steady_clock::now();
         printElapsedTime("normal desc: ", t1, t2);
         printElapsedTime("sem desc: ", t3, t4);
@@ -197,9 +197,10 @@ int main(int argc, char **argv) {
         waitKey(2);
 
         image1 = image2.clone();
-        semantic1 = semantic2.clone();
+        //semantic1 = semantic2.clone();
     }
 
+    pose_estimation->closeFiles();
     waitKey(0);
     cout << "\nPress 'ESC' to exit the program..." << endl;
     

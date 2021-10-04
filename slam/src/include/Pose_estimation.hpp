@@ -15,7 +15,9 @@ private:
 
     std::vector<cv::Mat> translations;
     std::string textMapPath;
+    std::string dataEvoPath;
     std::ifstream mapFilePtr;
+    std::ofstream dataEvoPtr;
 
 public:
     Pose_estimation();
@@ -24,6 +26,6 @@ public:
     
     void updateMap2d(const cv::Mat &R,const cv::Mat &t);
     void updateMap2dText();
-
+    void closeFiles();
     cv::Mat vee2hat(const cv::Mat &var);
 };

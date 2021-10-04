@@ -32,7 +32,7 @@ endif
 # Command used at clean target
 RM = rm -rf
 
-OPENCV = `pkg-config opencv --cflags --libs`
+OPENCV = `pkg-config opencv4 --cflags --libs`
 LIBS = $(OPENCV)
 
 #
@@ -64,32 +64,3 @@ clean:
 	@ rmdir objects
 
 .PHONY: all clean
-
-
-# debug: objFolderDebug $(PROJ_NAME_DEBUG)
-
-# $(PROJ_NAME_DEBUG): $(OBJ)
-# 	@ echo 'Building binary using GCC linker: $@'
-# 	$(CC) $^ -o $@ $(LIBS)
-# 	@ echo 'Finished building binary: $@'
-# 	@ echo ' '
-
-# ./objectsDebug/%.o: ./src/%.cpp ./src/include/%.hpp
-# 	@ echo 'Building target using GCC compiler: $<'
-# 	$(CC) $< $(CC_FLAGS_DEBUG) -o $@ $(LIBS)
-# 	@ echo ' '
-
-# ./objectsDebug/orb_my.o: ./src/orb_my.cpp $(H_SOURCE)
-# 	@ echo 'Building target using GCC compiler: $<'
-# 	$(CC) $< $(CC_FLAGS_DEBUG) -o $@ $(LIBS)
-# 	@ echo ' '
-
-# objFolderDebug:
-# 	@ mkdir -p objectsDebug
-
-# cleanDebug:
-# 	@ $(RM) ./objectsDebug/*.o $(PROJ_NAME_DEBUG) *~
-# 	@ rmdir objectsDebug
-
-
-# .PHONY: all clean
