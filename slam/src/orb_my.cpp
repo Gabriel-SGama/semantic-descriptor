@@ -20,13 +20,27 @@ using namespace cv;
 const int nfeatures = 500;
 // const float factorPI = CV_PI/180.0;
 
-const double matches_lower_bound = 40.0;
+const double matches_lower_bound = 45.0;
 
 /* ====== */
 /*  Main  */
 /* ====== */
 /* This program demonstrates how to extract ORB features and perform matching using the OpenCV library. */
 int main(int argc, char **argv) {
+    std::ifstream mapGTin;
+    std::ofstream mapGTout;
+    mapGTin.open("../carla-pythonAPI/pos_kitti.txt");
+    mapGTout.open("../carla-pythonAPI/pos_kitti_align.txt");
+
+    float x, y, z, r11, r12, r13, r21, r22, r23, r31 ,r32 ,r33;
+    
+    // int nlines = count(istreambuf_iterator<char>(mapGTin), 
+    //          istreambuf_iterator<char>(), '\n');
+
+    // mapGTin.clear();
+    // mapGTin.seekg(0);
+    
+    cout << r11 << " | " << z << endl;
 
     cout << "[orb_cv] Hello!" << endl << endl;
     
@@ -41,8 +55,8 @@ int main(int argc, char **argv) {
     Mat image_gray1;
     Mat image_gray2;
 
-    //Mat semantic1;
-    //Mat semantic2;
+    Mat semantic1;
+    Mat semantic2;
     
     vector<KeyPoint> keypoints1, keypoints2;
     Mat descriptors1, descriptors2, sem_descriptor1, sem_descriptor2;
@@ -52,9 +66,12 @@ int main(int argc, char **argv) {
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
     
     VideoCapture cap("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_camera_kitti.avi"); 
-    //VideoCapture cap_seg("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_seg.avi"); 
+    VideoCapture cap_seg("/home/gama/code/semantic-descriptor/carla-pythonAPI/out_seg_kitti.avi"); 
     
-    if(!cap.isOpened() /*|| !cap_seg.isOpened()*/){
+    Mat K = (Mat_<double>(3, 3) << 256.0, 0, 256.0, 0, 256.0, 256.0, 0, 0, 1.0);
+    Mat R, t, t_hat;
+
+    if(!cap.isOpened() || !cap_seg.isOpened()){
         cout << "Error opening video stream or file" << endl;
         return -1;
     }
@@ -62,29 +79,44 @@ int main(int argc, char **argv) {
     int frameid = 0;
     bool read_flag = true;
 
+    // while(frameid < _OFFSET_IN_VID){
+    //     cap.read(image1);
+    //     cap_seg.read(semantic1);
+    //     frameid++;
+    // }
+    
+    // read_flag = cap.read(image2);
+    // cap_seg.read(semantic2);
+    
+
     while(cap.isOpened()){
         frameid++;
 
+        //ignores begining
         if(frameid < _OFFSET_IN_VID){
             cap.read(image1);
-            //cap_seg.read(semantic1);
+            cap_seg.read(semantic1);
+            mapGTin >> r11 >> r12 >> r13 >> x >> r21 >> r22 >> r23 >> y >> r31 >> r32 >> r33 >> z;
+            mapGTin.get();
             continue;
         }
-        
-        
-        cap.read(image2);
-        //cap_seg.read(semantic2);
-        
-        image1 = image2.clone();
-        //semantic1 = semantic2.clone();
             
         for(int k = 0; k < _FRAMES_JUMPS; k++){
             read_flag = cap.read(image2);
-            //cap_seg.read(semantic2);
+            cap_seg.read(semantic2);
+            mapGTin >> r11 >> r12 >> r13 >> x >> r21 >> r22 >> r23 >> y >> r31 >> r32 >> r33 >> z;
+            mapGTin.get();
         }
 
+
+      
         if(!read_flag)
             break;
+
+        mapGTout << fixed << setprecision(4) << r11 << " " << r12 << " " << r13 << " " << x << " "
+        << r21 << " " << r22 << " " << r23 << " " << z << " "
+        << r31 << " " << r32 << " " << r33 << " " << y << "\n";
+
 
         cvtColor(image1, image_gray1, COLOR_BGR2GRAY);
         cvtColor(image2, image_gray2, COLOR_BGR2GRAY);
@@ -92,24 +124,23 @@ int main(int argc, char **argv) {
         detector->detect(image_gray1, keypoints1);
         detector->detect(image_gray2, keypoints2);
 
-        Timer t1 = chrono::steady_clock::now();
+        // Timer t1 = chrono::steady_clock::now();
         // descriptor->compute(image_gray1, keypoints1, sem_descriptor1);
         // descriptor->compute(image_gray2, keypoints2, sem_descriptor2);
-        Timer t2 = chrono::steady_clock::now();
+        // Timer t2 = chrono::steady_clock::now();
+        // printElapsedTime("normal desc: ", t1, t2);
 
         Timer t3 = chrono::steady_clock::now();
-        orbFeatures->computeDesc(image_gray1, image_gray1/*semantic1*/, keypoints1, sem_descriptor1);
-        orbFeatures->computeDesc(image_gray2, image_gray2/*semantic2*/, keypoints2, sem_descriptor2);
+        orbFeatures->computeDescNormal(image_gray1, semantic1, keypoints1, sem_descriptor1);
+        orbFeatures->computeDescNormal(image_gray2, semantic2, keypoints2, sem_descriptor2);
         Timer t4 = chrono::steady_clock::now();
-        printElapsedTime("normal desc: ", t1, t2);
         printElapsedTime("sem desc: ", t3, t4);
 
-        // vector<DMatch> matches;
-        vector<DMatch> sem_matches;
-        // matcher->match(sem_descriptor1, sem_descriptor2, sem_matches);
-        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, sem_matches);
+        vector<DMatch> matches;
+        // matcher->match(sem_descriptor1, sem_descriptor2, matches);
+        orbFeatures->matchDescNormal(sem_descriptor1, sem_descriptor2, matches);
         
-        auto min_max = minmax_element(sem_matches.begin(), sem_matches.end(), [](const DMatch &m1, const DMatch &m2){
+        auto min_max = minmax_element(matches.begin(), matches.end(), [](const DMatch &m1, const DMatch &m2){
             return m1.distance < m2.distance;
         });
 
@@ -119,8 +150,8 @@ int main(int argc, char **argv) {
         vector<DMatch> goodMatches;
 
         for (int i=0; i<sem_descriptor1.rows; i++){
-            if (sem_matches[i].distance <= max(2*min_dist, matches_lower_bound)){
-                goodMatches.push_back(sem_matches[i]);
+            if (matches[i].distance <= max(2*min_dist, matches_lower_bound)){
+                goodMatches.push_back(matches[i]);
             }
         }
 
@@ -133,26 +164,41 @@ int main(int argc, char **argv) {
         drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
         drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
         
-        drawMatches(image1, keypoints1, image2, keypoints2, sem_matches, image_matches,
+        drawMatches(image1, keypoints1, image2, keypoints2, matches, image_matches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         drawMatches(image1, keypoints1, image2, keypoints2, goodMatches, image_goodMatches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
         // /* Results */
-        cout << "-- Number of matches: " << sem_matches.size() << endl << endl;
+        cout << "-- Number of matches: " << matches.size() << endl << endl;
         
         cout << "-- Min dist: " << min_dist << endl;
         cout << "-- Max dist: " << max_dist << endl;
         cout << "-- Number of good matches: " << goodMatches.size() << endl << endl;
-        cout << "In total, we get " << goodMatches.size() << "/" << sem_matches.size() << " good pairs of feature points." << endl << endl;
+        cout << "In total, we get " << goodMatches.size() << "/" << matches.size() << " good pairs of feature points." << endl << endl;
 
-        Mat K = (Mat_<double>(3, 3) << 256.0, 0, 256.0, 0, 256.0, 256.0, 0, 0, 1.0);
-        Mat R,t;
+        // R_old = R.clone();
+        // t_old = t.clone();
+        
         pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
+        
+        // if(goodMatches.size() > MIN_FEATURES && min_dist < 40){
+        //     read_flag = cap.read(image2);
+        //     cap_seg.read(semantic2);
+        // }else{
+        //     image1 = image2.clone();
+        //     semantic1 = semantic2.clone();
+
+        //     read_flag = cap.read(image2);
+        //     cap.read(semantic2);
+
+        //     pose_estimation->updateMap2d(R_old,t_old);
+        // }
+        
         pose_estimation->updateMap2d(R,t);
-      
+
         string flag;
-        Mat t_hat = pose_estimation->vee2hat(t);
+        t_hat = pose_estimation->vee2hat(t);
         int counter = 0;
 
         for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
@@ -194,10 +240,10 @@ int main(int argc, char **argv) {
         // imshow("outImage_gray2", outImage_gray2);
         // imshow("image_matches", image_matches);
         imshow("image_goodMatches", image_goodMatches);
-        waitKey(2);
+        waitKey(100);
 
         image1 = image2.clone();
-        //semantic1 = semantic2.clone();
+        semantic1 = semantic2.clone();
     }
 
     pose_estimation->closeFiles();

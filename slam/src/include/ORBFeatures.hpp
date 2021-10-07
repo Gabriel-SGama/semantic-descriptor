@@ -3,6 +3,8 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
+#define MIN_FEATURES 40
+
 const float factorPI = CV_PI/180.0;
 
 class ORBFeatures
@@ -286,11 +288,12 @@ private:
 
 public:
 
-    ORBFeatures(int maxFeatures = 500, int nrBrief = 256, int nSemrBrief = 24, int patch_size = 31, int half_patch_size = 15, float matches_lower_bound = 30.0);
+    ORBFeatures(int maxFeatures = 500, int nrBrief = 256, int nSemrBrief = 6, int patch_size = 31, int half_patch_size = 15, float matches_lower_bound = 30.0);
 
-    void computeDesc(const cv::Mat &img, const cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
+    void computeDescNormal(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
+    void computeDesc(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
     void computeSemanticDesc(const cv::Mat &sem_img, const std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
     void convertDesc(cv::Mat &descriptor, cv::Mat &sem_descriptor, cv::Mat semantic_img);
+    void matchDescNormal(cv::Mat &descriptor1, cv::Mat &descriptor2, std::vector<cv::DMatch> &matches);
     void matchDesc(cv::Mat &descriptor1, cv::Mat &descriptor2, std::vector<cv::DMatch> &matches);
-
 };

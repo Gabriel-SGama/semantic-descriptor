@@ -70,7 +70,7 @@ except ImportError:
 VIEW_WIDTH = 512
 VIEW_HEIGHT = 512
 VIEW_FOV = 90
-
+FILE_NAME = 'kitti'
 
 
 
@@ -413,15 +413,15 @@ class BasicSynchronousClient(object):
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
 			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
-			out_camera = cv2.VideoWriter('out_camera_kitti_test.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			out_camera = cv2.VideoWriter('out_camera_' + FILE_NAME + '.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
 			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
-			out_seg = cv2.VideoWriter('out_seg_kitti_test.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+			out_seg = cv2.VideoWriter('out_seg_' + FILE_NAME + '.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
 
 			#fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
 			#out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			file_ptr = open("pos_kitti_test.txt", 'w')
+			file_ptr = open('pos_' + FILE_NAME + '.txt', 'w')
 
 			pos = self.car.get_transform()
 			ini_x = pos.location.x
