@@ -1,11 +1,14 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <fstream>
 
 /*defines*/
-#define _OFFSET_IN_VID 20
+#define _OFFSET_IN_VID 30
 #define _FRAMES_JUMPS 3
 
+const int _N_RANSAC = 55;
+const int _L_MAX = 10;
 class Pose_estimation
 {
 private:
@@ -13,6 +16,11 @@ private:
     cv::Mat R_total;
     cv::Mat map;
 
+
+    std::vector<int> nFailedRansac;
+    std::vector<int> nL;
+    std::vector<int> ntotalFeatures;
+    std::vector<int> nFeaturesUsed;
     std::vector<cv::Mat> translations;
     std::string textMapPath;
     std::string dataEvoPath;
@@ -28,4 +36,10 @@ public:
     void updateMap2dText();
     void closeFiles();
     cv::Mat vee2hat(const cv::Mat &var);
+
+    std::vector<cv::DMatch> ransac(const std::vector<cv::KeyPoint> &keypoints1,     
+    const std::vector<cv::KeyPoint> &keypoints2, const std::vector<cv::DMatch> &matches, cv::Mat &R, cv::Mat &t, cv::Mat &K);
+
+    void plotInfo();
+
 };

@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
         Mat outImage1, outImage2;
         Mat outImage_gray1, outImage_gray2;
         Mat image_matches;
-        Mat image_goodMatches;
+        Mat image_goodMatches, image_goodMatchesRansac;
 
         drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
         drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
@@ -180,9 +180,11 @@ int main(int argc, char **argv) {
         // R_old = R.clone();
         // t_old = t.clone();
         
-        pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
-        
-        // if(goodMatches.size() > MIN_FEATURES && min_dist < 40){
+        // pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
+        vector<DMatch> goodMatchesRansac = pose_estimation->ransac(keypoints1, keypoints2, goodMatches, R, t, K);
+        drawMatches(image1, keypoints1, image2, keypoints2, goodMatchesRansac, image_goodMatchesRansac,
+            Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+        // // if(goodMatches.size() > MIN_FEATURES && min_dist < 40){
         //     read_flag = cap.read(image2);
         //     cap_seg.read(semantic2);
         // }else{
@@ -201,26 +203,26 @@ int main(int argc, char **argv) {
         t_hat = pose_estimation->vee2hat(t);
         int counter = 0;
 
-        for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
-            // Pixel Coordinates to Normalized Coordinates, {(p1, p2)}_n to {(x1, x2)}_n
-            Point2f x1 = pixel2cam(keypoints1[m.queryIdx].pt, K);  // p1->x1, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 1
-            Point2f x2 = pixel2cam(keypoints2[m.trainIdx].pt, K);  // p2->x2, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 2
+        // for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
+        //     // Pixel Coordinates to Normalized Coordinates, {(p1, p2)}_n to {(x1, x2)}_n
+        //     Point2f x1 = pixel2cam(keypoints1[m.queryIdx].pt, K);  // p1->x1, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 1
+        //     Point2f x2 = pixel2cam(keypoints2[m.trainIdx].pt, K);  // p2->x2, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 2
 
-            // Convert to Homogeneous Coordinates
-            Mat xh1 = (Mat_<double>(3,1) << x1.x, x1.y, 1);
-            Mat xh2 = (Mat_<double>(3,1) << x2.x, x2.y, 1);
+        //     // Convert to Homogeneous Coordinates
+        //     Mat xh1 = (Mat_<double>(3,1) << x1.x, x1.y, 1);
+        //     Mat xh2 = (Mat_<double>(3,1) << x2.x, x2.y, 1);
 
-            // Calculate Epipolar Constraint
-            double res = ((cv::Mat)(xh2.t()*t_hat*R*xh1)).at<double>(0);
+        //     // Calculate Epipolar Constraint
+        //     double res = ((cv::Mat)(xh2.t()*t_hat*R*xh1)).at<double>(0);
 
-            if(res > -1e-2 && res < 1e-2){
-                flag = "Ok!";
-                counter++;
-            }else
-                flag = "Failed!";
+        //     if(res > -1e-2 && res < 1e-2){
+        //         flag = "Ok!";
+        //         counter++;
+        //     }else
+        //         flag = "Failed!";
 
-            // printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
-        }
+        //     // printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
+        // }
 
         // cout << "\nFinal Result: " << counter << "/" << goodMatches.size() << " Features Pairs respected the Epipolar Constraint!"<< endl << endl;
 
@@ -239,7 +241,8 @@ int main(int argc, char **argv) {
         // imshow("outImage_gray1", outImage_gray1);
         // imshow("outImage_gray2", outImage_gray2);
         // imshow("image_matches", image_matches);
-        imshow("image_goodMatches", image_goodMatches);
+        imshow("Good Matches", image_goodMatches);
+        imshow("Matches Ransac", image_goodMatchesRansac);
         waitKey(100);
 
         image1 = image2.clone();
@@ -247,6 +250,7 @@ int main(int argc, char **argv) {
     }
 
     pose_estimation->closeFiles();
+    pose_estimation->plotInfo();
     waitKey(0);
     cout << "\nPress 'ESC' to exit the program..." << endl;
     
