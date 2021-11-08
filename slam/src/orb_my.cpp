@@ -17,10 +17,8 @@ using std::ofstream;
 using namespace std;
 using namespace cv;
 
-const int nfeatures = 500;
 // const float factorPI = CV_PI/180.0;
 
-const double matches_lower_bound = 45.0;
 
 /* ====== */
 /*  Main  */
@@ -47,7 +45,7 @@ int main(int argc, char **argv) {
     ofstream outdata;
     outdata.open("data.txt");
 
-    ORBFeatures *orbFeatures = new ORBFeatures();
+    ORBFeatures *orbFeatures = new ORBFeatures(nfeatures, nrBrief, nSemrBrief, patch_size, half_patch_size);
     Pose_estimation *pose_estimation = new Pose_estimation();
 
     Mat image1;
@@ -88,7 +86,10 @@ int main(int argc, char **argv) {
     // read_flag = cap.read(image2);
     // cap_seg.read(semantic2);
     
-
+    // sem_descriptor1 = Mat::zeros(nfeatures, nrBrief/32, CV_32SC1);
+    // sem_descriptor2 = Mat::zeros(nfeatures, nrBrief/32, CV_32SC1);
+    // sem_descriptor1 = Mat::zeros(nfeatures, nrBrief/32 + nSemrBrief/6, CV_32SC1);
+    // sem_descriptor2 = Mat::zeros(nfeatures, nrBrief/32 + nSemrBrief/6, CV_32SC1);
     while(cap.isOpened()){
         frameid++;
 
@@ -108,8 +109,6 @@ int main(int argc, char **argv) {
             mapGTin.get();
         }
 
-
-      
         if(!read_flag)
             break;
 
@@ -131,15 +130,15 @@ int main(int argc, char **argv) {
         // printElapsedTime("normal desc: ", t1, t2);
 
         Timer t3 = chrono::steady_clock::now();
-        orbFeatures->computeDescNormal(image_gray1, semantic1, keypoints1, sem_descriptor1);
-        orbFeatures->computeDescNormal(image_gray2, semantic2, keypoints2, sem_descriptor2);
+        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
+        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
         Timer t4 = chrono::steady_clock::now();
         printElapsedTime("sem desc: ", t3, t4);
 
         vector<DMatch> matches;
         // matcher->match(sem_descriptor1, sem_descriptor2, matches);
-        orbFeatures->matchDescNormal(sem_descriptor1, sem_descriptor2, matches);
-        
+        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
+
         auto min_max = minmax_element(matches.begin(), matches.end(), [](const DMatch &m1, const DMatch &m2){
             return m1.distance < m2.distance;
         });
@@ -149,7 +148,7 @@ int main(int argc, char **argv) {
 
         vector<DMatch> goodMatches;
 
-        for (int i=0; i<sem_descriptor1.rows; i++){
+        for (int i=0; i< (int)keypoints1.size(); i++){
             if (matches[i].distance <= max(2*min_dist, matches_lower_bound)){
                 goodMatches.push_back(matches[i]);
             }
@@ -161,9 +160,9 @@ int main(int argc, char **argv) {
         Mat image_matches;
         Mat image_goodMatches, image_goodMatchesRansac;
 
-        drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
-        drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
-        
+        // drawKeypoints(image1, keypoints1, outImage1, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+        // drawKeypoints(image2, keypoints2, outImage2, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+        cout << keypoints1.size() << endl;
         drawMatches(image1, keypoints1, image2, keypoints2, matches, image_matches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         drawMatches(image1, keypoints1, image2, keypoints2, goodMatches, image_goodMatches,
@@ -180,10 +179,10 @@ int main(int argc, char **argv) {
         // R_old = R.clone();
         // t_old = t.clone();
         
-        // pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
-        vector<DMatch> goodMatchesRansac = pose_estimation->ransac(keypoints1, keypoints2, goodMatches, R, t, K);
-        drawMatches(image1, keypoints1, image2, keypoints2, goodMatchesRansac, image_goodMatchesRansac,
-            Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+        pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
+        // vector<DMatch> goodMatchesRansac = pose_estimation->ransac(keypoints1, keypoints2, goodMatches, R, t, K);
+        // drawMatches(image1, keypoints1, image2, keypoints2, goodMatchesRansac, image_goodMatchesRansac,
+        //     Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         // // if(goodMatches.size() > MIN_FEATURES && min_dist < 40){
         //     read_flag = cap.read(image2);
         //     cap_seg.read(semantic2);
@@ -201,7 +200,7 @@ int main(int argc, char **argv) {
 
         string flag;
         t_hat = pose_estimation->vee2hat(t);
-        int counter = 0;
+        // int counter = 0;
 
         // for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
         //     // Pixel Coordinates to Normalized Coordinates, {(p1, p2)}_n to {(x1, x2)}_n
@@ -242,15 +241,15 @@ int main(int argc, char **argv) {
         // imshow("outImage_gray2", outImage_gray2);
         // imshow("image_matches", image_matches);
         imshow("Good Matches", image_goodMatches);
-        imshow("Matches Ransac", image_goodMatchesRansac);
-        waitKey(100);
+        // imshow("Matches Ransac", image_goodMatchesRansac);
+        waitKey(1);
 
         image1 = image2.clone();
         semantic1 = semantic2.clone();
     }
 
     pose_estimation->closeFiles();
-    pose_estimation->plotInfo();
+    // pose_estimation->plotInfo();
     waitKey(0);
     cout << "\nPress 'ESC' to exit the program..." << endl;
     

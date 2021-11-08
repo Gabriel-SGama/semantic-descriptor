@@ -2,13 +2,8 @@
 
 #include <opencv2/opencv.hpp>
 #include <fstream>
+#include "consts.h"
 
-/*defines*/
-#define _OFFSET_IN_VID 30
-#define _FRAMES_JUMPS 3
-
-const int _N_RANSAC = 55;
-const int _L_MAX = 10;
 class Pose_estimation
 {
 private:

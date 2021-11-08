@@ -16,7 +16,7 @@ Pose_estimation::Pose_estimation()
     
     translations.push_back(Mat::zeros(3, 1, CV_64FC1));
    
-    dataEvoPath = "../carla-pythonAPI/mapGenRansac.txt";
+    dataEvoPath = "../carla-pythonAPI/mapGenSem.txt";
     dataEvoPtr.open(dataEvoPath);
     
     /*
@@ -95,7 +95,7 @@ void Pose_estimation::pose_estimation_2d2d(const vector<KeyPoint> &keypoints1, c
         points2.push_back(keypoints2[matches[i].trainIdx].pt);  // p2->x2, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 2  // FIXME: Pixel Coordinates? Isto está correto?
     }
 
-    cout << endl;
+    // cout << endl;
 
     //--- Calculate the Fundamental Matrix
     // Timer t1 = chrono::steady_clock::now();
@@ -158,7 +158,7 @@ vector<DMatch> Pose_estimation::ransac(const vector<KeyPoint> &keypoints1, const
     vector<DMatch> goodMatchesRansac;
     int L = 0;
     // int n_ransac_min = min(_N_RANSAC, (int) (matches.size()*0.8));
-    int n_ransac_min = (int) (matches.size()*0.92);
+    int n_ransac_min = (int) (matches.size()*0.85);
     
     Mat t_hat;
     
@@ -284,7 +284,7 @@ void Pose_estimation::plotInfo(){
         for (int k = -pointsToConsiderate/2; k < pointsToConsiderate/2; k++){
             vecProd += abs(vec.at(i + k).x*vec.at(i + k + 1).y - vec.at(i + k).y*vec.at(i + k + 1).x);
         }
-        cout << vecProd << endl;
+        // cout << vecProd << endl;
         if(vecProd > 1.8)
             curveDetect.push_back(true);
         else
