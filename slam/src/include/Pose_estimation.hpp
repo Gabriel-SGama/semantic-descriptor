@@ -2,7 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <fstream>
-#include "consts.h"
+#include "consts.hpp"
 
 class Pose_estimation
 {

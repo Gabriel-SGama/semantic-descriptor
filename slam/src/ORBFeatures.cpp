@@ -29,7 +29,6 @@ ORBFeatures::ORBFeatures(int maxFeatures, int nrBrief, int nSemrBrief, int patch
     
 }
 
-
 void ORBFeatures::createPyramid(const Mat img, vector<Mat> &pyramid){
     const int EDGE_THRESHOLD = 31;
 
@@ -58,21 +57,10 @@ void ORBFeatures::createPyramid(const Mat img, vector<Mat> &pyramid){
     }
 }
 
-
-void ORBFeatures::computeDescNormal(const Mat &img, Mat &sem_img, vector<KeyPoint> &keypoints, Mat &descriptor){
-    
-    createPyramid(img, imagePyramid);
-    
-    for(int i = 0; i < nLevels; i++){
-        GaussianBlur(imagePyramid[i], imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
-    }
-    
-    descriptor = Mat::zeros(keypoints.size(), nrBrief/32, CV_32SC1);
-    
+void ORBFeatures::Brief(const Mat &img, vector<KeyPoint> &keypoints, Mat &descriptor){
     int count_kp = 0;
 
     int32_t desc;
-    int32_t sem_desc = 0;
 
     #define GET_VALUE(idx_p) \
         center[(cvRound(ORB_pattern[idx_p]*sin_kp + ORB_pattern[idx_p+1]*cos_kp)*step + \
@@ -96,67 +84,27 @@ void ORBFeatures::computeDescNormal(const Mat &img, Mat &sem_img, vector<KeyPoin
             }
             descriptor.at<u_int32_t>(count_kp, i) = desc;
         }
-    
         count_kp++;
-    
     }
-    #undef GET_VALUE
 
+    #undef GET_VALUE
 }
 
-void ORBFeatures::computeDesc(const Mat &img, Mat &sem_img, vector<KeyPoint> &keypoints, Mat &descriptor){
-    
-    createPyramid(img, imagePyramid);
-    // createPyramid(sem_img, sem_imagePyramid);
-    
-    for(int i = 0; i < nLevels; i++){
-        GaussianBlur(imagePyramid[i], imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
-        // GaussianBlur(sem_imagePyramid[i], sem_imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
-    }
-    
-    descriptor = Mat::zeros(keypoints.size(), nrBrief/32 + nSemrBrief/6, CV_32SC1);
-    
+void ORBFeatures::semDesc1(const Mat &img, Mat &sem_img, vector<KeyPoint> &keypoints, Mat &descriptor){
     int count_kp = 0;
 
-    int32_t desc;
     int32_t sem_desc = 0;
-
-    #define GET_VALUE(idx_p) \
-        center[(cvRound(ORB_pattern[idx_p]*sin_kp + ORB_pattern[idx_p+1]*cos_kp)*step + \
-                cvRound(ORB_pattern[idx_p]*cos_kp - ORB_pattern[idx_p+1]*sin_kp))]
 
     #define GET_SEM_VALUE(idx_p) \
         center[(cvRound(ORB_pattern[idx_p]*0.5*sin_kp + ORB_pattern[idx_p+1]*0.5*cos_kp)*step + \
                 cvRound(ORB_pattern[idx_p]*0.5*cos_kp - ORB_pattern[idx_p+1]*0.5*sin_kp))]
-        
-    // #define GET_SEM_VALUE(idx_p) \
-         center[(cvRound(SEM_ORB_pattern[idx_p]*20*sin_kp + SEM_ORB_pattern[idx_p+1]*20*cos_kp)*step + \
-                 cvRound(SEM_ORB_pattern[idx_p]*20*cos_kp - SEM_ORB_pattern[idx_p+1]*20*sin_kp))]
-        
+    
     for(auto &kp: keypoints){
-
         float sin_kp = sin(kp.angle*factorPI);
         float cos_kp = cos(kp.angle*factorPI);
-
-        const float scale = imagePyramidScale[kp.octave];
-        u_char* center = &imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*scale), cvRound(kp.pt.x*scale));
-        int step = (int)imagePyramid[kp.octave].step;
         
-        for(int i = 0; i < 8; i++){
-            int idx = i*32*4;
-            desc = 0;  
-            
-            for(int pt = 0; pt < 32; pt++){
-                desc |= (GET_VALUE(idx + 4*pt) < GET_VALUE(idx + 4*pt + 2)) << pt;
-            }
-            descriptor.at<u_int32_t>(count_kp, i) = desc;
-        }
-    
-        // center = &sem_imagePyramid[kp.octave].at<uchar>(cvRound(kp.pt.y*scale), cvRound(kp.pt.x*scale));
-        // step = (int)sem_imagePyramid[kp.octave].step;
-
-        center = &sem_img.at<uchar>(cvRound(kp.pt.y), cvRound(kp.pt.x));
-        step = (int)sem_img.step;
+        u_char* center = &sem_img.at<uchar>(cvRound(kp.pt.y), cvRound(kp.pt.x));
+        int step = (int)sem_img.step;
 
         // semantic desc
         for(int i = 0; i < nSemrBrief/6; i++){
@@ -170,11 +118,29 @@ void ORBFeatures::computeDesc(const Mat &img, Mat &sem_img, vector<KeyPoint> &ke
             descriptor.at<u_int32_t>(count_kp, nrBrief/32 + i) = sem_desc;
         }
         count_kp++;
-    
     }
-    #undef GET_VALUE
+
     #undef GET_SEM_VALUE
 
+}
+
+void ORBFeatures::computeDesc(const Mat &img, Mat &sem_img, vector<KeyPoint> &keypoints, Mat &descriptor, int descType){
+    createPyramid(img, imagePyramid);
+    // createPyramid(sem_img, sem_imagePyramid);
+    
+    for(int i = 0; i < nLevels; i++){
+        GaussianBlur(imagePyramid[i], imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
+        // GaussianBlur(sem_imagePyramid[i], sem_imagePyramid[i], Size(7, 7), 2, 2, BORDER_REFLECT_101);
+    }
+
+    if(descType == _BRIEF_DESC){
+        descriptor = Mat::zeros(keypoints.size(), nrBrief/32, CV_32SC1);
+        Brief(img, keypoints, descriptor);
+    }else{
+        descriptor = Mat::zeros(keypoints.size(), nrBrief/32 + nSemrBrief/6, CV_32SC1);
+        Brief(img, keypoints, descriptor);
+        semDesc1(img, sem_img, keypoints, descriptor);
+    }
 }
 
 void ORBFeatures::matchDescNormal(Mat &descriptor1, Mat &descriptor2, vector<DMatch> &matches){
@@ -222,7 +188,6 @@ void ORBFeatures::matchDesc(Mat &descriptor1, Mat &descriptor2, vector<DMatch> &
 
             for (int j = nrBrief/32; j < nrBrief/32 + nSemrBrief/6; j++) {
                 for (int k = 0; k < 6; k++) {
-                    // cout << ((int)((descriptor1.at<int32_t>(i1,j) >> k*6 ^ descriptor1.at<int32_t>(i2,j) >> k*6) & 63) ? 8 : 0) << endl;
                     distance += (((descriptor1.at<uint32_t>(i1,j) ^ descriptor2.at<uint32_t>(i2,j)) >> k*6) & 63) ? semError : 0;
                 }
             }

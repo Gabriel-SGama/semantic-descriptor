@@ -35,6 +35,7 @@ class dataloader:
             addPathImg = 'images/*.jpg'
             addPathLabel = 'v2.0/instances/*.png'
 
+        print(self.pathImages + 'train*/' + addPathImg)
         trainImages = sorted(glob(self.pathImages + 'train*/' + addPathImg))
         valImages = sorted(glob(self.pathImages + 'val*/' + addPathImg))
         testImages = sorted(glob(self.pathImages + 'test*/' + addPathImg))
@@ -114,9 +115,9 @@ class dataloader:
         rot_angle =  random.uniform(-0.0872665, 0.0872665)
         image = tf.cond(chance_rot, lambda: image, lambda: rotateImg(image, rot_angle, [self.img_height, self.img_width]))
 
-        label = tf.image.resize(label, (self.img_height, self.img_width))
+        label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
 
-        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [self.img_height, self.img_width]))
+        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [int(self.img_height/2), int(self.img_width/2)]))
 
         #flip
         chance_flip = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
@@ -192,8 +193,8 @@ def augmentImageGBC(image):
 
 
 @tf.function
-def _parse_function(filename, label, img_height, img_width):
-    image = tf.io.read_file(filename)
+def _parse_function(img_filename, label_filename, img_height, img_width):
+    image = tf.io.read_file(img_filename)
     image = tf.image.decode_image(image, expand_animations = False, channels = 3)
 
     image = tf.image.resize(image, (img_height, img_width))
@@ -203,9 +204,9 @@ def _parse_function(filename, label, img_height, img_width):
     image = 2.*(image-0.5) #-1 to 1
 
     #label
-    label = tf.io.read_file(label)
+    label = tf.io.read_file(label_filename)
     label = tf.image.decode_image(label, expand_animations = False, channels = 1)
-    label = tf.image.resize(label, (int(img_height), int(img_width)))
+    label = tf.image.resize(label, (int(img_height/2), int(img_width/2)))
     label = tf.cast(label, tf.uint8)
     label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
     
@@ -220,8 +221,19 @@ def rotateImg(image, rot_angle, size):
     new_height = tf.cast(size[0]*vcos + size[1]*vsin, tf.int32)
     new_width = tf.cast(size[1]*vcos + size[0]*vsin, tf.int32)
 
+    # print(image.shape)
     image = tf.image.resize(image, (new_height, new_width))
-    image = tfa.image.rotate(image, rot_angle, interpolation = 'nearest')
+    # print(image.shape)
+    # print(type(image))
+    # print(rot_angle)
+    # image = tf.squeeze(image, 2)
+    # print(image.shape)
+    # print(type(image))
+    # tf.keras.preprocessing.image.random_rotation(
+    # image, rot_angle, row_axis=0, col_axis=1, channel_axis=2, fill_mode='nearest',
+    # cval=0.0, interpolation_order=1)
+    
+    # image = tfa.image.rotate(image, rot_angle, interpolation = 'nearest')
     
     offset_height = tf.cast((new_height - size[0])/2, tf.int32)
     offset_width = tf.cast((new_width - size[1])/2, tf.int32)

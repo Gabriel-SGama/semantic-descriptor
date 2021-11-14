@@ -9,6 +9,8 @@ import time
 from glob import glob
 import random
 
+from tensorflow.python.keras.engine import training
+
 #local imports
 import dataloader as dl
 import labels as lb
@@ -32,7 +34,7 @@ def convert_arg_line_to_args(arg_line):
         yield arg
 
 
-parser = argparse.ArgumentParser(description='SemSeg TensorFlow 2.0 implementation.', fromfile_prefix_chars='@')
+parser = argparse.ArgumentParser(description='SemSeg TensorFlow 2 implementation.', fromfile_prefix_chars='@')
 parser.convert_arg_line_to_args = convert_arg_line_to_args
 
 parser.add_argument('--mode', type=str, help='train or test', default='train')
@@ -114,7 +116,7 @@ def predictRand(filename, model, dataset, index):
 
     image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], 
                                     sorted(glob(pathLabels + dataset + '*/' + addPathLabel))[index],
-                                    256, 512)
+                                    512, 1024)
     
     label_disp = label.numpy()
     print("label shape: " + str(label_disp.shape))
@@ -125,7 +127,7 @@ def predictRand(filename, model, dataset, index):
 
     image_input = np.expand_dims(image, axis=0)
 
-    pred = model.predict(image_input)
+    pred, _ = model.predict(image_input)
     print("pred shape: " + str(pred.shape))
 
     pred_disp = makePredImg(pred)
@@ -170,14 +172,21 @@ def predictAttention(truck, segHead, attModel, dataset, index = 10, filename = '
     image_inputS1 = np.expand_dims(image, axis=0) 
     image_inputS2 = tf.image.resize(image_inputS1, (1024, 2048)) #testing
 
+    
     #run model
-    predTruckS1 = truck([image_inputS1])[0]
-    predS1 = segHead([predTruckS1])[0]
-    predTruckS2 = truck([image_inputS2])[0]
-    predS2 = segHead([predTruckS2])[0]
-    finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
+    predTruckS1 = truck([image_inputS1], training = False)
+    predS1 = truck([predTruckS1], training = False)
+    predTruckS2 = truck([image_inputS2], training = False)
+    predS2 = truck([predTruckS2], training = False)
+    
+    # predTruckS1 = truck([image_inputS1])[0]
+    # predS1 = segHead([predTruckS1])[0]
+    # predTruckS2 = truck([image_inputS2])[0]
+    # predS2 = segHead([predTruckS2])[0]
+    # finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
+    finalPred = attModel([predTruckS1, predS1, predS2], training = False)
 
-    attMask = np.squeeze(attMask)
+    # attMask = np.squeeze(attMask)
 
     finalPred_disp = np.squeeze(finalPred)
     finalPred_disp = lb.cityscapes_pallete_float[np.argmax(finalPred_disp, axis=-1), :]  
@@ -198,7 +207,7 @@ def predictAttention(truck, segHead, attModel, dataset, index = 10, filename = '
     imgList.append({'title' : 'Label', 'img' : label_disp})
     imgList.append({'title' : 'PredS1', 'img' : predS1_disp})
     imgList.append({'title' : 'PredS2', 'img' : predS2_disp})
-    imgList.append({'title' : 'Att Mask', 'img' : attMask})
+    # imgList.append({'title' : 'Att Mask', 'img' : attMask})
     imgList.append({'title' : 'Final Pred Att', 'img' : finalPred_disp})
 
     displayImage(imgList, image_disp, label_disp, finalPred_disp, filename)
@@ -242,7 +251,7 @@ def trainTruck(model, trainDataset, valDataset, sizes):
             
             # train_loss = train(model, images, labels)
             with tf.GradientTape() as tape:
-                pred = model(images, training = True)        
+                pred, inter_out = model(images, training = True)        
                 train_loss = loss(pred, labels)
 
             grads = tape.gradient(train_loss, model.trainable_weights)
@@ -250,9 +259,9 @@ def trainTruck(model, trainDataset, valDataset, sizes):
 
             train_sum_loss = tf.reduce_mean(train_loss)
 
-            with file_writer_train.as_default():
-                tf.summary.scalar(f'loss', data=train_sum_loss, step=i)
-                tf.summary.scalar(f'lr', data=optimizer._decayed_lr(tf.float32), step=i)
+            # with file_writer_train.as_default():
+            #     tf.summary.scalar(f'loss', data=train_sum_loss, step=i)
+            #     tf.summary.scalar(f'lr', data=optimizer._decayed_lr(tf.float32), step=i)
             
             i += 1
             batchIndex += 1
@@ -263,7 +272,7 @@ def trainTruck(model, trainDataset, valDataset, sizes):
         iou_sum = 0
         for batchData in valDataset:
             images, labels = batchData
-            pred = model(images, training = False)
+            pred, _ = model(images, training = False)
             iou = iou_coef(labels, pred)
  
             val_loss = loss(pred, labels)
@@ -274,9 +283,9 @@ def trainTruck(model, trainDataset, valDataset, sizes):
         val_sum_loss /= (sizes['val']/args.batch_size)
         iou_sum /= (sizes['val']/args.batch_size)
         
-        with file_writer_val.as_default():
-            tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
-            tf.summary.scalar(f'iou', data=iou_sum, step=i)
+        # with file_writer_val.as_default():
+        #     tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
+        #     tf.summary.scalar(f'iou', data=iou_sum, step=i)
 
         #saves model if is the best result and it is 60% complete
         if(iou_sum > iou_sum_max):
@@ -293,11 +302,18 @@ def trainTruck(model, trainDataset, valDataset, sizes):
 
 
 def devideModel(base_model):
-    truck = K.function([base_model.layers[0].input],
-                                    [base_model.get_layer('post_relu').output])
+    # truck = K.function([base_model.layers[0].input],
+    #                                 [base_model.get_layer('post_relu').output])
 
-    segHead = K.function([base_model.get_layer('conv_up_1').input],
-                                    [base_model.get_layer('tf_op_layer_Softmax').output])
+    # segHead = K.function([base_model.get_layer('conv_up_1').input],
+    #                                 [base_model.get_layer('tf_op_layer_Softmax').output])
+
+    truck = Model(inputs=base_model.input,
+                                    outputs=base_model.get_layer('post_relu').output)
+
+    segHead = Model(inputs=base_model.get_layer('conv_up_1'),
+                                    outputs=base_model.get_layer('tf_op_layer_Softmax').output)
+
 
     return truck, segHead
 
@@ -381,7 +397,7 @@ def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simpli
             attModel.save(args.save_model_path)
             iou_sum_max = iou_sum
 
-    sendMessage(iou_sum_max, num_epochs)
+    # sendMessage(iou_sum_max, num_epochs)
 
 
 def sendMessage(iou_sum, num_epochs):
@@ -404,18 +420,14 @@ def main():
     for arg in vars(args):
         print (arg, getattr(args, arg))
     
-    model = resnet_34()
-    model.summary()
-    return
     # model = LMM()
     dataset = dl.dataloader(args)
 
-    # if(args.load_model_path == ''):
-    #     model = resNet50V2Model(args.pre_train_model_path)
-    #     return
-    # else:
-    #     print('Using trained model')
-    #     model = keras.models.load_model(args.load_model_path, compile=False)
+    if(args.load_model_path == ''):
+        model = resNet50V2Model(args.pre_train_model_path)
+    else:
+        print('Using trained model')
+        model = keras.models.load_model(args.load_model_path, compile=False)
 
 
     # load data
@@ -425,10 +437,10 @@ def main():
     # model.summary()
 
     if(args.mode == 'train'):
-        predictRand("beforeTrainLMM.png", model, 'val', index=10)
+        predictRand("beforeTrain.png", model, 'val', index=10)
         print('Training network truck')
         trainTruck(model, trainDataset, valDataset, sizes)
-        predictRand("afterTrainLMM.png", model, 'val', index=10)
+        predictRand("afterTrain.png", model, 'val', index=10)
     
     elif(args.mode == 'att'):
         print('Training network attention')
@@ -437,7 +449,16 @@ def main():
         predictAttention(truck, segHead, attModel, 'val', index=1)
         trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes)
         predictAttention(truck, segHead, attModel, 'val', filename='afterTrainAtt')
-        
+
+    elif(args.mode == 'eval_truck'):
+        print('infering example')
+        predictRand("eval_truck.png", model, 'val', index=10)
+
+    elif(args.mode == 'eval_att'):
+        print('infering att example')
+        attModel = createAttModel(args.load_att_path)
+        truck, segHead = devideModel(model)
+        predictAttention(truck, segHead, attModel, 'val', index=1)
     
     # if(args.save_model_path != ""):
     #     print("Saving model in " + args.save_model_path + "...")

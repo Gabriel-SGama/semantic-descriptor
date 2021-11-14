@@ -1,8 +1,15 @@
 #pragma once
+#include <opencv2/opencv.hpp>
+
+//CONFIG
+#define _BRIEF_DESC 0
+#define _SEM_DESC_1 1
+
+const int alignGT = 0;
 
 //ORB
 const int nfeatures = 2000;
-const double matches_lower_bound = 50.0;
+const double matches_lower_bound = 40.0;
 const int nrBrief = 256;
 const int nSemrBrief = 24;
 const int patch_size = 31;

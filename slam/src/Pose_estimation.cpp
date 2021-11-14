@@ -16,7 +16,7 @@ Pose_estimation::Pose_estimation()
     
     translations.push_back(Mat::zeros(3, 1, CV_64FC1));
    
-    dataEvoPath = "../carla-pythonAPI/mapGenSem.txt";
+    dataEvoPath = "../carla-pythonAPI/mapGem.txt";
     dataEvoPtr.open(dataEvoPath);
     
     /*

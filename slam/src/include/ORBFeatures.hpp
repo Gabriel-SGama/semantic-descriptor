@@ -3,7 +3,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
-#include "consts.h"
+#include "consts.hpp"
 
 class ORBFeatures
 {
@@ -543,9 +543,10 @@ public:
 
     ORBFeatures(int maxFeatures, int nrBrief, int nSemrBrief, int patch_size, int half_patch_size);
 
-    void computeDescNormal(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
-    void computeDesc(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
-    void computeSemanticDesc(const cv::Mat &sem_img, const std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
+    void Brief(const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
+    void semDesc1(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor);
+    void computeDescNormal(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor, bool alocDesc);
+    void computeDesc(const cv::Mat &img, cv::Mat &sem_img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptor, int descType);
     void convertDesc(cv::Mat &descriptor, cv::Mat &sem_descriptor, cv::Mat semantic_img);
     void matchDescNormal(cv::Mat &descriptor1, cv::Mat &descriptor2, std::vector<cv::DMatch> &matches);
     void matchDesc(cv::Mat &descriptor1, cv::Mat &descriptor2, std::vector<cv::DMatch> &matches);

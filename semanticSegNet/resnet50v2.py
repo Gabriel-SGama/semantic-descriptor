@@ -88,7 +88,13 @@ def resNet50V2Model(filePath):
     model = Model(base_model.input, base_model.get_layer('post_relu').output, name = 'resnet50v2_variation')
     output = resNet50V2Dec(model.output)
     model = Model(model.input, output, name = 'resnet50v2_variation_dec')
+    
+    aux_model = Model(inputs=model.inputs,
+                           outputs=model.outputs + [model.get_layer('post_relu').output])
+    tf.keras.utils.plot_model(
+    aux_model, to_file='model.png', show_shapes=True,
+    show_layer_names=True, rankdir='TB', expand_nested=False, dpi=96)
     # model.summary()
     
-    return model
+    return aux_model
 

@@ -20,6 +20,26 @@ using namespace cv;
 // const float factorPI = CV_PI/180.0;
 
 
+
+vector<String> readFile(string filePath, vector<Mat>imageSeq)
+{
+    vector<String> filenames;
+
+    glob(filePath, filenames);
+
+    Mat myImage;
+
+    imageSeq.reserve(filenames.size());
+    cout << "reading " << filenames.size() << " files..." << endl;
+    // for (size_t i = 0; i < filenames.size(); ++i) {
+    //     imageSeq.push_back(imread(filenames[i]));
+    //     if(!(i%(filenames.size()/8)))
+    //         cout << "arquivo " << i << endl;
+    // }
+    return filenames;
+}
+
+
 /* ====== */
 /*  Main  */
 /* ====== */
@@ -32,14 +52,15 @@ int main(int argc, char **argv) {
 
     float x, y, z, r11, r12, r13, r21, r22, r23, r31 ,r32 ,r33;
     
+
+    // vector<Mat> imageSeq;
+    // vector<String> filenames = readFile("/home/gama/Documents/Datasets/data_odometry_gray/dataset/sequences/00/image_0/*.png", imageSeq);
     // int nlines = count(istreambuf_iterator<char>(mapGTin), 
     //          istreambuf_iterator<char>(), '\n');
 
     // mapGTin.clear();
     // mapGTin.seekg(0);
     
-    cout << r11 << " | " << z << endl;
-
     cout << "[orb_cv] Hello!" << endl << endl;
     
     ofstream outdata;
@@ -90,21 +111,26 @@ int main(int argc, char **argv) {
     // sem_descriptor2 = Mat::zeros(nfeatures, nrBrief/32, CV_32SC1);
     // sem_descriptor1 = Mat::zeros(nfeatures, nrBrief/32 + nSemrBrief/6, CV_32SC1);
     // sem_descriptor2 = Mat::zeros(nfeatures, nrBrief/32 + nSemrBrief/6, CV_32SC1);
+
     while(cap.isOpened()){
+    // while(frameid < filenames.size()){
         frameid++;
 
         //ignores begining
         if(frameid < _OFFSET_IN_VID){
             cap.read(image1);
             cap_seg.read(semantic1);
+            // image1 = imread(filenames[frameid-1]);
             mapGTin >> r11 >> r12 >> r13 >> x >> r21 >> r22 >> r23 >> y >> r31 >> r32 >> r33 >> z;
             mapGTin.get();
             continue;
         }
-            
+        
         for(int k = 0; k < _FRAMES_JUMPS; k++){
             read_flag = cap.read(image2);
             cap_seg.read(semantic2);
+            // image2 = imread(filenames[frameid]);
+
             mapGTin >> r11 >> r12 >> r13 >> x >> r21 >> r22 >> r23 >> y >> r31 >> r32 >> r33 >> z;
             mapGTin.get();
         }
@@ -123,21 +149,18 @@ int main(int argc, char **argv) {
         detector->detect(image_gray1, keypoints1);
         detector->detect(image_gray2, keypoints2);
 
-        // Timer t1 = chrono::steady_clock::now();
-        // descriptor->compute(image_gray1, keypoints1, sem_descriptor1);
-        // descriptor->compute(image_gray2, keypoints2, sem_descriptor2);
-        // Timer t2 = chrono::steady_clock::now();
-        // printElapsedTime("normal desc: ", t1, t2);
-
-        Timer t3 = chrono::steady_clock::now();
-        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1);
-        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2);
-        Timer t4 = chrono::steady_clock::now();
-        printElapsedTime("sem desc: ", t3, t4);
+        Timer t1 = chrono::steady_clock::now();
+        orbFeatures->computeDesc(image_gray1, semantic1, keypoints1, sem_descriptor1, _BRIEF_DESC);
+        orbFeatures->computeDesc(image_gray2, semantic2, keypoints2, sem_descriptor2, _BRIEF_DESC);
+        Timer t2 = chrono::steady_clock::now();
+        printElapsedTime("desc time: ", t1, t2);
 
         vector<DMatch> matches;
+        Timer t3 = chrono::steady_clock::now();
         // matcher->match(sem_descriptor1, sem_descriptor2, matches);
-        orbFeatures->matchDesc(sem_descriptor1, sem_descriptor2, matches);
+        orbFeatures->matchDescNormal(sem_descriptor1, sem_descriptor2, matches);
+        Timer t4 = chrono::steady_clock::now();
+        printElapsedTime("match time: ", t3, t4);
 
         auto min_max = minmax_element(matches.begin(), matches.end(), [](const DMatch &m1, const DMatch &m2){
             return m1.distance < m2.distance;
@@ -167,6 +190,7 @@ int main(int argc, char **argv) {
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         drawMatches(image1, keypoints1, image2, keypoints2, goodMatches, image_goodMatches,
             Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+        
 
         // /* Results */
         cout << "-- Number of matches: " << matches.size() << endl << endl;
@@ -179,51 +203,18 @@ int main(int argc, char **argv) {
         // R_old = R.clone();
         // t_old = t.clone();
         
+        Timer t5 = chrono::steady_clock::now();
         pose_estimation->pose_estimation_2d2d(keypoints1, keypoints2, goodMatches, R, t, K);
+        Timer t6 = chrono::steady_clock::now();
+        printElapsedTime("pose estimation time: ", t5, t6);
         // vector<DMatch> goodMatchesRansac = pose_estimation->ransac(keypoints1, keypoints2, goodMatches, R, t, K);
         // drawMatches(image1, keypoints1, image2, keypoints2, goodMatchesRansac, image_goodMatchesRansac,
         //     Scalar::all(-1), Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-        // // if(goodMatches.size() > MIN_FEATURES && min_dist < 40){
-        //     read_flag = cap.read(image2);
-        //     cap_seg.read(semantic2);
-        // }else{
-        //     image1 = image2.clone();
-        //     semantic1 = semantic2.clone();
 
-        //     read_flag = cap.read(image2);
-        //     cap.read(semantic2);
-
-        //     pose_estimation->updateMap2d(R_old,t_old);
-        // }
-        
         pose_estimation->updateMap2d(R,t);
 
         string flag;
         t_hat = pose_estimation->vee2hat(t);
-        // int counter = 0;
-
-        // for(DMatch m : goodMatches){  // For each matched pair {(p1, p2)}_n, do...
-        //     // Pixel Coordinates to Normalized Coordinates, {(p1, p2)}_n to {(x1, x2)}_n
-        //     Point2f x1 = pixel2cam(keypoints1[m.queryIdx].pt, K);  // p1->x1, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 1
-        //     Point2f x2 = pixel2cam(keypoints2[m.trainIdx].pt, K);  // p2->x2, Camera Normalized Coordinates of the n-th Feature Keypoint in Image 2
-
-        //     // Convert to Homogeneous Coordinates
-        //     Mat xh1 = (Mat_<double>(3,1) << x1.x, x1.y, 1);
-        //     Mat xh2 = (Mat_<double>(3,1) << x2.x, x2.y, 1);
-
-        //     // Calculate Epipolar Constraint
-        //     double res = ((cv::Mat)(xh2.t()*t_hat*R*xh1)).at<double>(0);
-
-        //     if(res > -1e-2 && res < 1e-2){
-        //         flag = "Ok!";
-        //         counter++;
-        //     }else
-        //         flag = "Failed!";
-
-        //     // printf("x2^T*E*x1 = % 01.19f\t%s\n", res, flag.c_str());
-        // }
-
-        // cout << "\nFinal Result: " << counter << "/" << goodMatches.size() << " Features Pairs respected the Epipolar Constraint!"<< endl << endl;
 
         /* Display */
         //input
