@@ -1,5 +1,6 @@
 import sys
 import argparse
+from PIL.Image import new
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -152,7 +153,7 @@ def predictRand(filename, model, dataset, index):
 #     return attPart1, attPart2
 
 
-def predictAttention(truck, segHead, attModel, dataset, index = 10, filename = 'testAttFull'):
+def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFull'):
 
     pathImages = args.dataset_images_path
     pathLabels = args.dataset_labels_path
@@ -174,16 +175,9 @@ def predictAttention(truck, segHead, attModel, dataset, index = 10, filename = '
 
     
     #run model
-    predTruckS1 = truck([image_inputS1], training = False)
-    predS1 = truck([predTruckS1], training = False)
-    predTruckS2 = truck([image_inputS2], training = False)
-    predS2 = truck([predTruckS2], training = False)
+    predS1, predTruckS1 = model([image_inputS1], training=False)
+    predS2, predTruckS2 = model([image_inputS2], training=False)
     
-    # predTruckS1 = truck([image_inputS1])[0]
-    # predS1 = segHead([predTruckS1])[0]
-    # predTruckS2 = truck([image_inputS2])[0]
-    # predS2 = segHead([predTruckS2])[0]
-    # finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
     finalPred = attModel([predTruckS1, predS1, predS2], training = False)
 
     # attMask = np.squeeze(attMask)
@@ -298,7 +292,7 @@ def trainTruck(model, trainDataset, valDataset, sizes):
     print("EPOCHS = " + str(num_epochs))
     print("IOU MAX = " + str(iou_sum_max))
 
-    sendMessage(iou_sum_max, num_epochs)
+    # sendMessage(iou_sum_max, num_epochs)
 
 
 def devideModel(base_model):
@@ -400,19 +394,19 @@ def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simpli
     # sendMessage(iou_sum_max, num_epochs)
 
 
-def sendMessage(iou_sum, num_epochs):
-    #send message
-    account_sid = 'AC7910130707b45602521fcd5c1a72773e'
-    auth_token = 'b8d10f3b8c24a552b9133c69fb4f6d1c'
+# def sendMessage(iou_sum, num_epochs):
+#     #send message
+#     account_sid = 'AC7910130707b45602521fcd5c1a72773e'
+#     auth_token = 'b8d10f3b8c24a552b9133c69fb4f6d1c'
 
-    client = Client(account_sid, auth_token)
+#     client = Client(account_sid, auth_token)
 
-    message = '\neopchs: ' + str(num_epochs) + '\nfinal_iou: ' + str(iou_sum)
+#     message = '\neopchs: ' + str(num_epochs) + '\nfinal_iou: ' + str(iou_sum)
 
-    client.api.account.messages.create(
-        to="+5521996551919",
-        from_="+14242971795",
-        body=message)
+#     client.api.account.messages.create(
+#         to="+5521996551919",
+#         from_="+14242971795",
+#         body=message)
 
 
 def main():
@@ -428,7 +422,6 @@ def main():
     else:
         print('Using trained model')
         model = keras.models.load_model(args.load_model_path, compile=False)
-
 
     # load data
     # trainDataset, valDataset, _, sizes = dl.loadDataset(args)
@@ -457,8 +450,7 @@ def main():
     elif(args.mode == 'eval_att'):
         print('infering att example')
         attModel = createAttModel(args.load_att_path)
-        truck, segHead = devideModel(model)
-        predictAttention(truck, segHead, attModel, 'val', index=1)
+        predictAttention(model, attModel, 'val', index=1, filename='testAttNewModel')
     
     # if(args.save_model_path != ""):
     #     print("Saving model in " + args.save_model_path + "...")

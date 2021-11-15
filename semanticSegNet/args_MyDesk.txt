@@ -1,4 +1,4 @@
---mode train
+--mode eval_att
 --dataset cityscapes
 --dataset_images_path /home/gama/Documents/Datasets/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/
 --dataset_labels_path /home/gama/Documents/Datasets/cityscapes/gtFine_trainvaltest/gtFine/
@@ -6,4 +6,6 @@
 --img_height 256
 --num_epochs 1
 --batch_size 2
+--load_model_path r50V2.h5
+--load_att_path att1.h5
 --GPU -1
