@@ -1,9 +1,9 @@
---mode eval_att
---dataset cityscapes
---dataset_images_path /home/gama/Documents/Datasets/cityscapes/leftImg8bit_trainvaltest/leftImg8bit/
---dataset_labels_path /home/gama/Documents/Datasets/cityscapes/gtFine_trainvaltest/gtFine/
---img_width 512
---img_height 256
+--mode train
+--dataset kitti
+--dataset_images_path /home/gama/Documents/Datasets/kitti/data_semantics/
+--dataset_labels_path /home/gama/Documents/Datasets/kitti/data_semantics/
+--img_width 1248
+--img_height 384
 --num_epochs 1
 --batch_size 2
 --load_model_path r50V2.h5

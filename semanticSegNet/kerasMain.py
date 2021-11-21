@@ -41,7 +41,7 @@ parser.convert_arg_line_to_args = convert_arg_line_to_args
 parser.add_argument('--mode', type=str, help='train or test', default='train')
 parser.add_argument('--dataset', type=str, help='mapillary or cityscapes', required=True)
 parser.add_argument('--dataset_images_path', type=str, help='image path', required=True)
-parser.add_argument('--dataset_labels_path', type=str, help='label path', required=True)
+parser.add_argument('--dataset_labels_path', type=str, help='label path', default="")
 parser.add_argument('--img_width', type=int, help='image width', required=True)
 parser.add_argument('--img_height', type=int, help='img_height', required=True)
 parser.add_argument('--num_epochs', type=int, help='number of epochs of training', required=True)
@@ -102,30 +102,45 @@ def makePredImg(pred):
 
     return pred
 
-def predictRand(filename, model, dataset, index):
-
+def readFiles(dataset, index):
     pathImages = args.dataset_images_path
     pathLabels = args.dataset_labels_path
+    width = args.img_width
+    height = args.img_height
     
     if(args.dataset == 'cityscapes'):
         addPathImg = '*/*_leftImg8bit.png'
         addPathLabel = '*/*_labelIds.png'
+    elif(args.dataset == 'kitti'):
+        addPathImg = 'image_2/*.png'
+        addPathLabel = 'semantic/*.png'
     else:
         addPathImg = '/images/*.jpg'
         addPathLabel = '/v2.0/instances/*.png'
 
+    print(pathImages + dataset + '*/' + addPathImg)
+    if(pathLabels == ''):
+        image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], '', height, width)
+    else:
+        image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], 
+                                        sorted(glob(pathLabels + dataset + '*/' + addPathLabel))[index],
+                                        height, width)
 
-    image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], 
-                                    sorted(glob(pathLabels + dataset + '*/' + addPathLabel))[index],
-                                    512, 1024)
-    
-    label_disp = label.numpy()
-    print("label shape: " + str(label_disp.shape))
-    label_disp = lb.cityscapes_pallete_float[np.argmax(label_disp, axis=-1), :] #label for diplay  
-    label_disp = label_disp[:,:,0:3]
-    
+    return image, label
+
+def predictRand(model, dataset, index, filename='eval_truck'):
+
+    image, label = readFiles(dataset, index)
     image_disp = image/2. + 0.5 #0 to 1 (plot)
 
+    if(args.dataset_labels_path != ''):
+        label_disp = label.numpy()
+        print("label shape: " + str(label_disp.shape))
+        label_disp = lb.cityscapes_pallete_float[np.argmax(label_disp, axis=-1), :] #label for diplay  
+        label_disp = label_disp[:,:,0:3]
+    else:
+        label_disp = image_disp
+    
     image_input = np.expand_dims(image, axis=0)
 
     pred, _ = model.predict(image_input)
@@ -142,25 +157,9 @@ def predictRand(filename, model, dataset, index):
     
     displayImage(imgList, image_disp, label_disp, pred_disp, filename)
         
-
-# def devideAttModel(attModel):
-#     attPart1 = K.function([attModel.layers[0].input],
-#                                     [base_model.get_layer('batch_normalization_12').output])
-
-#     attPart2 = K.function([base_model.get_layer('tf_op_layer_Sigmoid').input],
-#                                     [base_model.get_layer('tf_op_layer_add').output])
-
-#     return attPart1, attPart2
-
-
 def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFull'):
 
-    pathImages = args.dataset_images_path
-    pathLabels = args.dataset_labels_path
-
-    image, label = dl._parse_function(sorted(glob(pathImages + dataset + '/*/*_leftImg8bit.png'))[index], 
-                                    sorted(glob(pathLabels + dataset + '/*/*_labelIds.png'))[index],
-                                    512, 1024)
+    image, label = readFiles(index)
 
     label = tf.image.resize(label, (512, 1024)) #testing
     
@@ -233,6 +232,7 @@ def trainTruck(model, trainDataset, valDataset, sizes):
     i = 0
     iou_sum = 0
     iou_sum_max = 0
+    train_sum_loss_min = 1000
     for e in range(num_epochs):
         train_sum_loss = 0
         batchIndex = 0
@@ -253,66 +253,55 @@ def trainTruck(model, trainDataset, valDataset, sizes):
 
             train_sum_loss = tf.reduce_mean(train_loss)
 
-            # with file_writer_train.as_default():
-            #     tf.summary.scalar(f'loss', data=train_sum_loss, step=i)
-            #     tf.summary.scalar(f'lr', data=optimizer._decayed_lr(tf.float32), step=i)
+            with file_writer_train.as_default():
+                tf.summary.scalar(f'loss', data=train_sum_loss, step=i)
+                tf.summary.scalar(f'lr', data=optimizer._decayed_lr(tf.float32), step=i)
             
             i += 1
             batchIndex += 1
 
+        if(args.dataset != 'kitti'):
+            #evaluate validations set
+            val_sum_loss = 0
+            iou_sum = 0
+            for batchData in valDataset:
+                images, labels = batchData
+                pred, _ = model(images, training = False)
+                iou = iou_coef(labels, pred)
+    
+                val_loss = loss(pred, labels)
+                iou_sum += iou
+                
+                val_sum_loss += tf.reduce_mean(val_loss)
 
-        #evaluate validations set
-        val_sum_loss = 0
-        iou_sum = 0
-        for batchData in valDataset:
-            images, labels = batchData
-            pred, _ = model(images, training = False)
-            iou = iou_coef(labels, pred)
- 
-            val_loss = loss(pred, labels)
-            iou_sum += iou
+            val_sum_loss /= (sizes['val']/args.batch_size)
+            iou_sum /= (sizes['val']/args.batch_size)
             
-            val_sum_loss += tf.reduce_mean(val_loss)
+            with file_writer_val.as_default():
+                tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
+                tf.summary.scalar(f'iou', data=iou_sum, step=i)
 
-        val_sum_loss /= (sizes['val']/args.batch_size)
-        iou_sum /= (sizes['val']/args.batch_size)
+            #saves model if is the best result and it is 60% complete
+            if(iou_sum > iou_sum_max):
+                iou_sum_max = iou_sum
+
+                if(e > 0.6*num_epochs and args.save_model_path != ""):
+                    print("Saving model in " + args.save_model_path + "...")
+                    model.save(args.save_model_path)
         
-        # with file_writer_val.as_default():
-        #     tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
-        #     tf.summary.scalar(f'iou', data=iou_sum, step=i)
+        else:
+            if(train_sum_loss < train_sum_loss_min):
+                train_sum_loss_min = train_sum_loss
 
-        #saves model if is the best result and it is 60% complete
-        if(iou_sum > iou_sum_max):
-            iou_sum_max = iou_sum
-
-            if(e > 0.6*num_epochs and args.save_model_path != ""):
-                print("Saving model in " + args.save_model_path + "...")
-                model.save(args.save_model_path)
-
+                if(e > 0.6*num_epochs and args.save_model_path != ""):
+                    print("Saving model in " + args.save_model_path + "...")
+                    model.save(args.save_model_path)
+    
     print("EPOCHS = " + str(num_epochs))
     print("IOU MAX = " + str(iou_sum_max))
 
-    # sendMessage(iou_sum_max, num_epochs)
 
-
-def devideModel(base_model):
-    # truck = K.function([base_model.layers[0].input],
-    #                                 [base_model.get_layer('post_relu').output])
-
-    # segHead = K.function([base_model.get_layer('conv_up_1').input],
-    #                                 [base_model.get_layer('tf_op_layer_Softmax').output])
-
-    truck = Model(inputs=base_model.input,
-                                    outputs=base_model.get_layer('post_relu').output)
-
-    segHead = Model(inputs=base_model.get_layer('conv_up_1'),
-                                    outputs=base_model.get_layer('tf_op_layer_Softmax').output)
-
-
-    return truck, segHead
-
-
-def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simplify later
+def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
 
     logdir = "logs/scalars/" + args.metrics_path + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     file_writer_train = tf.summary.create_file_writer(logdir + "_train")
@@ -336,13 +325,17 @@ def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simpli
             imageS1, imageS2, label = batchData
             
             #images before training
-            predTruckS1 = truck([imageS1])[0]
-            predS1 = segHead([predTruckS1])[0]
-            predTruckS2 = truck([imageS2])[0]
-            predS2 = segHead([predTruckS2])[0]
+            predS1, predTruckS1 = model([imageS1], training=False)
+            predS2, predTruckS2 = model([imageS2], training=False)
+    
+            
+            # predTruckS1 = truck([imageS1])[0]
+            # predS1 = segHead([predTruckS1])[0]
+            # predTruckS2 = truck([imageS2])[0]
+            # predS2 = segHead([predTruckS2])[0]
             
             with tf.GradientTape() as tape:
-                finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = True)
+                finalPred = attModel([predTruckS1, predS1, predS2], training = True)
                 train_loss = loss(finalPred, label)
 
             grads = tape.gradient(train_loss, attModel.trainable_weights)
@@ -365,12 +358,16 @@ def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simpli
             imageS1, imageS2, label = batchData
             
             #images before training
-            predTruckS1 = truck([imageS1])[0]
-            predS1 = segHead([predTruckS1])[0]
-            predTruckS2 = truck([imageS2])[0]
-            predS2 = segHead([predTruckS2])[0]
+            predS1, predTruckS1 = model([imageS1], training=False)
+            predS2, predTruckS2 = model([imageS2], training=False)
+    
+            # predTruckS1 = truck([imageS1])[0]
+            # predS1 = segHead([predTruckS1])[0]
+            # predTruckS2 = truck([imageS2])[0]
+            # predS2 = segHead([predTruckS2])[0]
             
-            finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
+            # finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
+            finalPred = attModel([predTruckS1, predS1, predS2], training = False)
             iou = iou_coef(label, finalPred)
  
             val_loss = loss(finalPred, label)
@@ -394,21 +391,6 @@ def trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes): #simpli
     # sendMessage(iou_sum_max, num_epochs)
 
 
-# def sendMessage(iou_sum, num_epochs):
-#     #send message
-#     account_sid = 'AC7910130707b45602521fcd5c1a72773e'
-#     auth_token = 'b8d10f3b8c24a552b9133c69fb4f6d1c'
-
-#     client = Client(account_sid, auth_token)
-
-#     message = '\neopchs: ' + str(num_epochs) + '\nfinal_iou: ' + str(iou_sum)
-
-#     client.api.account.messages.create(
-#         to="+5521996551919",
-#         from_="+14242971795",
-#         body=message)
-
-
 def main():
 
     for arg in vars(args):
@@ -425,27 +407,29 @@ def main():
 
     # load data
     # trainDataset, valDataset, _, sizes = dl.loadDataset(args)
-    trainDataset, valDataset, _, sizes = dataset.loadDataset()
 
     # model.summary()
 
     if(args.mode == 'train'):
-        predictRand("beforeTrain.png", model, 'val', index=10)
         print('Training network truck')
+        trainDataset, valDataset, _, sizes = dataset.loadDataset()
+        predictRand(model, 'train', index=10, filename='beforeTrain.png')
+        print(len(trainDataset))
         trainTruck(model, trainDataset, valDataset, sizes)
-        predictRand("afterTrain.png", model, 'val', index=10)
+        predictRand(model, 'train', index=10, filename='afterTrain.png')
     
     elif(args.mode == 'att'):
         print('Training network attention')
+        trainDataset, valDataset, _, sizes = dataset.loadDataset()
         attModel = createAttModel(args.load_att_path)
-        truck, segHead = devideModel(model)
-        predictAttention(truck, segHead, attModel, 'val', index=1)
-        trainAtt(truck, segHead, attModel, trainDataset, valDataset, sizes)
-        predictAttention(truck, segHead, attModel, 'val', filename='afterTrainAtt')
+        # truck, segHead = devideModel(model)
+        predictAttention(model, attModel, 'val', index=1)
+        trainAtt(model, attModel, trainDataset, valDataset, sizes)
+        predictAttention(model, attModel, 'val', filename='afterTrainAtt')
 
     elif(args.mode == 'eval_truck'):
         print('infering example')
-        predictRand("eval_truck.png", model, 'val', index=10)
+        predictRand(model, 'train', index=10, filename='eval_truck2')
 
     elif(args.mode == 'eval_att'):
         print('infering att example')
@@ -455,7 +439,6 @@ def main():
     # if(args.save_model_path != ""):
     #     print("Saving model in " + args.save_model_path + "...")
     #     model.save(args.save_model_path)
-    
     
     return
     

@@ -1,5 +1,5 @@
 import tensorflow as tf
-import tensorflow_addons as tfa
+# import tensorflow_addons as tfa
 import random
 import math
 from glob import glob
@@ -30,22 +30,25 @@ class dataloader:
         if(self.dataset == 'cityscapes'):
             addPathImg = '*/*_leftImg8bit.png'
             addPathLabel = '*/*_labelIds.png'
+        elif(self.dataset == 'kitti'):
+            addPathImg = '/image_2/*.png'
+            addPathLabel = '/semantic/*.png'
         else:
             #Mapillary
             addPathImg = 'images/*.jpg'
             addPathLabel = 'v2.0/instances/*.png'
 
-        print(self.pathImages + 'train*/' + addPathImg)
-        trainImages = sorted(glob(self.pathImages + 'train*/' + addPathImg))
-        valImages = sorted(glob(self.pathImages + 'val*/' + addPathImg))
-        testImages = sorted(glob(self.pathImages + 'test*/' + addPathImg))
+        print(self.pathImages + 'train*' + addPathImg)
+        trainImages = sorted(glob(self.pathImages + 'train*' + addPathImg))
+        valImages = sorted(glob(self.pathImages + 'val*' + addPathImg))
+        testImages = sorted(glob(self.pathImages + 'test*' + addPathImg))
 
     #-----------labels path-----------
         # pathLabels = args.dataset_labels_path
 
-        trainLabels = sorted(glob(self.pathLabels + 'train*/' + addPathLabel))
-        valLabels = sorted(glob(self.pathLabels + 'val*/' + addPathLabel))
-        testLabels = sorted(glob(self.pathLabels + 'test*/' + addPathLabel))
+        trainLabels = sorted(glob(self.pathLabels + 'train*' + addPathLabel))
+        valLabels = sorted(glob(self.pathLabels + 'val*' + addPathLabel))
+        testLabels = sorted(glob(self.pathLabels + 'test*' + addPathLabel))
         
         # print(trainImages[2000])
         # print(trainLabels[2000])
@@ -63,9 +66,11 @@ class dataloader:
         trainDataset = trainDataset.map(self._parse_function_data_att, num_parallel_calls = AUTOTUNE) if(self.mode == 'att') else trainDataset.map(self._parse_function_data_aug, num_parallel_calls = AUTOTUNE)
         trainDataset = configure_for_performance(trainDataset, self.batch_size, AUTOTUNE)
 
-        valDataset = tf.data.Dataset.from_tensor_slices((valImages, valLabels))
-        valDataset = valDataset.map(self._parse_function_data_att, num_parallel_calls = AUTOTUNE) if(self.mode == 'att') else valDataset.map(self._parse_function_data_aug, num_parallel_calls = AUTOTUNE)
-        valDataset = configure_for_performance(valDataset, self.batch_size, AUTOTUNE)
+        valDataset = None
+        if(self.dataset != 'kitti'):
+            valDataset = tf.data.Dataset.from_tensor_slices((valImages, valLabels))
+            valDataset = valDataset.map(self._parse_function_data_att, num_parallel_calls = AUTOTUNE) if(self.mode == 'att') else valDataset.map(self._parse_function_data_aug, num_parallel_calls = AUTOTUNE)
+            valDataset = configure_for_performance(valDataset, self.batch_size, AUTOTUNE)
 
         # testDataset = tf.data.Dataset.from_tensor_slices((testImages, testLabels))
         # testDataset = testDataset.map(_parse_function, num_parallel_calls = AUTOTUNE)
@@ -79,16 +84,16 @@ class dataloader:
         image = tf.io.read_file(filename)
         image = tf.image.decode_image(image, expand_animations = False, channels = 3)
 
-        # image = tf.image.resize(image, (1024, 2048)) #for mapillary
+        image = tf.image.resize(image, (self.img_height, self.img_width))
 
         #Zoom (by crop)    
-        chance_crop = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        # chance_crop = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
 
-        offset_height = tf.random.uniform(shape=[], minval=0, maxval=self.img_height, dtype=tf.int32)
-        offset_width = tf.random.uniform(shape=[], minval=0, maxval=self.img_width, dtype=tf.int32)
+        # offset_height = tf.random.uniform(shape=[], minval=0, maxval=self.img_height, dtype=tf.int32)
+        # offset_width = tf.random.uniform(shape=[], minval=0, maxval=self.img_width, dtype=tf.int32)
 
-        image = tf.cond(chance_crop, lambda: tf.image.resize(image, (self.img_height, self.img_width)), 
-            lambda: tf.cast(tf.image.crop_to_bounding_box(image, offset_height, offset_width, self.img_height, self.img_width), tf.float32))
+        # image = tf.cond(chance_crop, lambda: tf.image.resize(image, (self.img_height, self.img_width)), 
+        #     lambda: tf.cast(tf.image.crop_to_bounding_box(image, offset_height, offset_width, self.img_height, self.img_width), tf.float32))
 
         # image = tf.cast(image, tf.float32)/255.
         image = image/255.
@@ -107,8 +112,8 @@ class dataloader:
         label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
 
         #Zoom (by crop)
-        label = tf.cond(chance_crop, lambda: label, 
-            lambda: tf.image.crop_to_bounding_box(label, offset_height, offset_width,  self.img_height, self.img_width))
+        # label = tf.cond(chance_crop, lambda: label, 
+        #     lambda: tf.image.crop_to_bounding_box(label, offset_height, offset_width,  self.img_height, self.img_width))
 
         #rotation
         chance_rot = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
@@ -203,7 +208,11 @@ def _parse_function(img_filename, label_filename, img_height, img_width):
     # normalization
     image = 2.*(image-0.5) #-1 to 1
 
+
     #label
+    if(label_filename == ''):
+        return image, image
+    
     label = tf.io.read_file(label_filename)
     label = tf.image.decode_image(label, expand_animations = False, channels = 1)
     label = tf.image.resize(label, (int(img_height/2), int(img_width/2)))
