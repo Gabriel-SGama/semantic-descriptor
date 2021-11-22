@@ -1,11 +1,13 @@
---mode train
+--mode inf_dataset
 --dataset kitti
 --dataset_images_path /home/gama/Documents/Datasets/kitti/data_semantics/
 --dataset_labels_path /home/gama/Documents/Datasets/kitti/data_semantics/
+--dataset_infer_path /home/gama/Documentos/datasets/kitti/data_odometry_color/dataset/sequences/03/image_2/*
+--dataset_save_infer_path /home/gama/Documentos/datasets/kitti/data_odometry_color/dataset/semantic/03/
 --img_width 1248
 --img_height 384
 --num_epochs 1
---batch_size 2
+--batch_size 1
 --load_model_path r50V2.h5
 --load_att_path att1.h5
 --GPU -1

@@ -13,6 +13,8 @@ class dataloader:
         self.img_width = args.img_width
         self.pathImages = args.dataset_images_path
         self.pathLabels = args.dataset_labels_path
+        self.dataset_infer_path = args.dataset_infer_path
+        self.dataset_save_infer_path = args.dataset_save_infer_path
         self.dataset = args.dataset
         self.mode = args.mode
 
@@ -168,6 +170,37 @@ class dataloader:
 
         return imageS1, imageS2, label
 
+    @tf.function
+    def loadInferDataset(self):
+        print("path to dataset: ", self.dataset_infer_path)
+        print("path to save infering: ", self.dataset_save_infer_path)
+
+        img_filename = sorted(glob(self.dataset_infer_path))
+        print("size of dataset: ", len(img_filename))
+
+        AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+        inferDataset = tf.data.Dataset.from_tensor_slices((img_filename))
+        inferDataset = inferDataset.map(self._parse_function_infer, num_parallel_calls = AUTOTUNE)
+        inferDataset = inferDataset.batch(self.batch_size)
+        inferDataset = inferDataset.prefetch(self.batch_size)
+        
+        return inferDataset
+
+    @tf.function
+    def _parse_function_infer(self, img_filename):
+        imageS1 = tf.io.read_file(img_filename)
+        imageS1 = tf.image.decode_image(imageS1, expand_animations = False, channels = 3)
+
+        imageS1 = tf.image.resize(imageS1, (self.img_height, self.img_width))
+        imageS1 = imageS1/255.
+
+        # normalization
+        imageS1 = 2.*(imageS1-0.5) #-1 to 1
+
+        imageS2 = tf.image.resize(imageS1, (2*self.img_height, 2*self.img_width))
+
+        return imageS1, imageS2, img_filename
 
 
 def configure_for_performance(ds, batch_size, AUTOTUNE):

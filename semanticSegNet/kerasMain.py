@@ -11,6 +11,7 @@ from glob import glob
 import random
 
 from tensorflow.python.keras.engine import training
+from PIL import Image
 
 #local imports
 import dataloader as dl
@@ -42,11 +43,13 @@ parser.add_argument('--mode', type=str, help='train or test', default='train')
 parser.add_argument('--dataset', type=str, help='mapillary or cityscapes', required=True)
 parser.add_argument('--dataset_images_path', type=str, help='image path', required=True)
 parser.add_argument('--dataset_labels_path', type=str, help='label path', default="")
+parser.add_argument('--dataset_infer_path', type=str, help='infer path', default="")
+parser.add_argument('--dataset_save_infer_path', type=str, help='save infer path', default="")
 parser.add_argument('--img_width', type=int, help='image width', required=True)
-parser.add_argument('--img_height', type=int, help='img_height', required=True)
+parser.add_argument('--img_height', type=int, help='image height', required=True)
 parser.add_argument('--num_epochs', type=int, help='number of epochs of training', required=True)
 parser.add_argument('--batch_size', type=int, help='batch size', required=True)
-parser.add_argument('--GPU', type=str, help='batch size', required=True)
+parser.add_argument('--GPU', type=str, help='GPU number', required=True)
 parser.add_argument('--save_model_path', type=str, help='directory where to save model', default="")
 parser.add_argument('--pre_train_model_path', type=str, help='directory to load pre trained model on Mapillary', default="")
 parser.add_argument('--load_model_path', type=str, help='directory where to load model from', default="")
@@ -390,6 +393,52 @@ def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
 
     # sendMessage(iou_sum_max, num_epochs)
 
+def inferData(model, attModel, inferDataset):
+    
+
+    firstLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float) #?
+    previusLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float)
+    currentLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float)
+
+    i=0
+    for batch in inferDataset:
+        imageS1, imageS2, fileName = batch
+
+        predS1, predTruckS1 = model([imageS1], training=False)
+        predS2, predTruckS2 = model([imageS2], training=False)
+        # print("fileName: ", fileName[-10:-1])
+        # print("predS1 shape: ", predS1.shape)
+        # print("predTruckS1 shape: ", predTruckS1.shape)
+        # print("predS2 shape: ", predS2.shape)
+        finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
+        image = np.squeeze(finalPred)
+        
+        currentLogOdd = 0.8*np.log(image/(1-image)) + 0.2*previusLogOdd 
+        
+        previusLogOdd = np.copy(currentLogOdd)
+        # for k in range(args.batch_size):
+        # image = finalPred[k,:,:,:]
+        labelArray = np.zeros((currentLogOdd.shape[0], currentLogOdd.shape[1]), dtype=np.uint8)
+        labelArray[:,:] = np.argmax(currentLogOdd, axis=-1)
+        # print("image: " , image.shape)
+        # print("labelArray: " , labelArray.shape)
+
+        label = Image.fromarray(labelArray)
+        label.save(args.dataset_save_infer_path + "label_bayes/" + str(i).zfill(6)+".png")
+        
+        colorLabelArray = np.zeros((currentLogOdd.shape[0], currentLogOdd.shape[1], 3), dtype=np.uint8)
+        colorLabelArray[:,:,:] = lb.cityscapes_pallete_float[np.argmax(currentLogOdd, axis=-1), :]*255
+        # print("colorLabelArray: " , colorLabelArray.shape)
+        
+        colorLabel = Image.fromarray(colorLabelArray)
+        colorLabel.save(args.dataset_save_infer_path + "color_bayes/" + str(i).zfill(6)+".png")
+        
+        i+=1
+        
+        print('\rbatch {}/{} {}{}'.format(int(i/args.batch_size), len(inferDataset), '>'*int(i/(30*args.batch_size)), '-'*int((len(inferDataset)-i/args.batch_size)/30)), end='', flush=True)
+
+    return
+
 
 def main():
 
@@ -422,7 +471,6 @@ def main():
         print('Training network attention')
         trainDataset, valDataset, _, sizes = dataset.loadDataset()
         attModel = createAttModel(args.load_att_path)
-        # truck, segHead = devideModel(model)
         predictAttention(model, attModel, 'val', index=1)
         trainAtt(model, attModel, trainDataset, valDataset, sizes)
         predictAttention(model, attModel, 'val', filename='afterTrainAtt')
@@ -436,6 +484,16 @@ def main():
         attModel = createAttModel(args.load_att_path)
         predictAttention(model, attModel, 'val', index=1, filename='testAttNewModel')
     
+    elif(args.mode == 'inf_dataset'):
+        attModel = createAttModel(args.load_att_path, args.img_height, args.img_width)
+        attModel.save("att1V2.h5")
+        print('infering folder: ', args.dataset_images_path)
+        inferDataset = dataset.loadInferDataset()
+        # attModel = createAttModel(args.load_att_path)
+        inferData(model, attModel, inferDataset)
+    else:
+        print(args.mode, " not supported")
+        return
     # if(args.save_model_path != ""):
     #     print("Saving model in " + args.save_model_path + "...")
     #     model.save(args.save_model_path)
