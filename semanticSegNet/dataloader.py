@@ -1,11 +1,10 @@
 import tensorflow as tf
-# import tensorflow_addons as tfa
+import tensorflow_addons as tfa
 import random
 import math
 from glob import glob
 
 class dataloader:
-    
     
     def __init__(self,args):
         self.batch_size = args.batch_size
@@ -20,10 +19,6 @@ class dataloader:
 
     def loadDataset(self):
 
-        # batch_size = args.batch_size
-        # img_width =  args.img_width
-        # img_height =  args.img_height
-
         print("start loading dataset\n")
 
     #-----------images path-----------
@@ -33,27 +28,27 @@ class dataloader:
             addPathImg = '*/*_leftImg8bit.png'
             addPathLabel = '*/*_labelIds.png'
         elif(self.dataset == 'kitti'):
-            addPathImg = '/image_2/*.png'
-            addPathLabel = '/semantic/*.png'
+            addPathImg = 'image_2/*.png'
+            addPathLabel = 'semantic/*.png'
         else:
             #Mapillary
             addPathImg = 'images/*.jpg'
             addPathLabel = 'v2.0/instances/*.png'
 
-        print(self.pathImages + 'train*' + addPathImg)
-        trainImages = sorted(glob(self.pathImages + 'train*' + addPathImg))
-        valImages = sorted(glob(self.pathImages + 'val*' + addPathImg))
-        testImages = sorted(glob(self.pathImages + 'test*' + addPathImg))
-
+        print(self.pathImages + '/train*/' + addPathImg)
+        trainImages = sorted(glob(self.pathImages + '/train*/' + addPathImg))
+        valImages = sorted(glob(self.pathImages + '/val*/' + addPathImg))
+        testImages = sorted(glob(self.pathImages + '/test/*' + addPathImg))
+        
     #-----------labels path-----------
         # pathLabels = args.dataset_labels_path
 
-        trainLabels = sorted(glob(self.pathLabels + 'train*' + addPathLabel))
-        valLabels = sorted(glob(self.pathLabels + 'val*' + addPathLabel))
-        testLabels = sorted(glob(self.pathLabels + 'test*' + addPathLabel))
+        trainLabels = sorted(glob(self.pathLabels + '/train*/' + addPathLabel))
+        valLabels = sorted(glob(self.pathLabels + '/val*/' + addPathLabel))
+        testLabels = sorted(glob(self.pathLabels + '/test*/' + addPathLabel))
         
-        # print(trainImages[2000])
-        # print(trainLabels[2000])
+        # print(trainImages[3500])
+        # print(trainLabels[3500])
 
     #-----------dataset-----------
         sizeDict = {'train' : len(trainImages), 'val' : len(valImages), 'test' : len(testImages)}
@@ -81,53 +76,56 @@ class dataloader:
         return trainDataset, valDataset, None, sizeDict
 
     @tf.function
-    def _parse_function_data_aug(self, filename, label):
+    def _parse_function_data_aug(self, filename, labelfile):
         #image input
         image = tf.io.read_file(filename)
         image = tf.image.decode_image(image, expand_animations = False, channels = 3)
 
-        image = tf.image.resize(image, (self.img_height, self.img_width))
 
-        #Zoom (by crop)    
-        # chance_crop = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        if(self.dataset == "cityscapes"):
+            # Zoom (by crop)    
+            chance_crop = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0
 
-        # offset_height = tf.random.uniform(shape=[], minval=0, maxval=self.img_height, dtype=tf.int32)
-        # offset_width = tf.random.uniform(shape=[], minval=0, maxval=self.img_width, dtype=tf.int32)
+            offset_height = tf.random.uniform(shape=[], minval=0, maxval=self.img_height, dtype=tf.int32)
+            offset_width = tf.random.uniform(shape=[], minval=0, maxval=self.img_width, dtype=tf.int32)
 
-        # image = tf.cond(chance_crop, lambda: tf.image.resize(image, (self.img_height, self.img_width)), 
-        #     lambda: tf.cast(tf.image.crop_to_bounding_box(image, offset_height, offset_width, self.img_height, self.img_width), tf.float32))
+            image = tf.cond(chance_crop, lambda: tf.image.resize(image, (self.img_height, self.img_width)), 
+                lambda: tf.cast(tf.image.crop_to_bounding_box(image, offset_height, offset_width, self.img_height, self.img_width), tf.float32))
+        else:
+            image = tf.image.resize(image, (self.img_height, self.img_width))
 
-        # image = tf.cast(image, tf.float32)/255.
         image = image/255.
 
-        chance_aug_img = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        chance_aug_img = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0
         image = tf.cond(chance_aug_img, lambda: image, lambda: augmentImageGBC(image))
-
         image = 2.*(image-0.5) #-1 to 1
 
+
         #label
-        label = tf.io.read_file(label)
+        label = tf.io.read_file(labelfile)
         label = tf.image.decode_image(label, expand_animations = False, channels = 1)
-        # label = tf.image.resize(label, (1024, 2048)) #for mapillary
 
         label = tf.cast(label, tf.uint8)
         label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
 
-        #Zoom (by crop)
-        # label = tf.cond(chance_crop, lambda: label, 
-        #     lambda: tf.image.crop_to_bounding_box(label, offset_height, offset_width,  self.img_height, self.img_width))
+        if(self.dataset == "cityscapes"):# Zoom (by crop)
+            label = tf.cond(chance_crop, lambda: label, 
+                lambda: tf.image.crop_to_bounding_box(label, offset_height, offset_width,  self.img_height, self.img_width))
+        # TODO zoom for other datasets
+        # else:
+        #     label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
+        
+        label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
 
         #rotation
-        chance_rot = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        chance_rot = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0
         rot_angle =  random.uniform(-0.0872665, 0.0872665)
         image = tf.cond(chance_rot, lambda: image, lambda: rotateImg(image, rot_angle, [self.img_height, self.img_width]))
-
-        label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
 
         label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [int(self.img_height/2), int(self.img_width/2)]))
 
         #flip
-        chance_flip = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        chance_flip = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0
         image = tf.cond(chance_flip, lambda: image, lambda: tf.image.flip_left_right(image))
         label = tf.cond(chance_flip, lambda: label, lambda: tf.image.flip_left_right(label))
 
@@ -160,7 +158,7 @@ class dataloader:
         imageS2 = tf.cond(chance_rot, lambda: imageS2, lambda: rotateImg(imageS2, rot_angle, [self.img_height, self.img_width]))
 
         label = tf.image.resize(label, (self.img_height, self.img_width))
-        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [self.img_height, self.img_width]))
+        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [self.img_height/2, self.img_width/2]))
 
         #flip
         chance_flip = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
@@ -169,6 +167,7 @@ class dataloader:
         label = tf.cond(chance_flip, lambda: label, lambda: tf.image.flip_left_right(label))
 
         return imageS1, imageS2, label
+
 
     @tf.function
     def loadInferDataset(self):
@@ -187,6 +186,7 @@ class dataloader:
         
         return inferDataset
 
+
     @tf.function
     def _parse_function_infer(self, img_filename):
         imageS1 = tf.io.read_file(img_filename)
@@ -201,6 +201,32 @@ class dataloader:
         imageS2 = tf.image.resize(imageS1, (2*self.img_height, 2*self.img_width))
 
         return imageS1, imageS2, img_filename
+    
+
+    @tf.function
+    def _parse_function(self, img_filename, label_filename):
+        image = tf.io.read_file(img_filename)
+        image = tf.image.decode_image(image, expand_animations = False, channels = 3)
+
+        image = tf.image.resize(image, (self.img_height, self.img_width))
+        image = image/255.
+
+        # normalization
+        image = 2.*(image-0.5) #-1 to 1
+
+
+        #label
+        if(label_filename == ''):
+            return image, image
+        
+        label = tf.io.read_file(label_filename)
+        label = tf.image.decode_image(label, expand_animations = False, channels = 1)
+        label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
+        # label = tf.cast(label, tf.uint8)
+        label = tf.cast(tf.one_hot(tf.cast(label, tf.int32), depth=35), tf.float32)
+        # label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
+        
+        return image, label
 
 
 def configure_for_performance(ds, batch_size, AUTOTUNE):
@@ -275,7 +301,7 @@ def rotateImg(image, rot_angle, size):
     # image, rot_angle, row_axis=0, col_axis=1, channel_axis=2, fill_mode='nearest',
     # cval=0.0, interpolation_order=1)
     
-    # image = tfa.image.rotate(image, rot_angle, interpolation = 'nearest')
+    image = tfa.image.rotate(image, rot_angle, interpolation = 'nearest')
     
     offset_height = tf.cast((new_height - size[0])/2, tf.int32)
     offset_width = tf.cast((new_width - size[1])/2, tf.int32)

@@ -40,44 +40,6 @@ def batchRelu(x, name):
     x = BatchNormalization(name=name)(x)
     return ReLU()(x)
 
-# def resNet50V2Dec(input, model):
-#     x = Conv2DTranspose(1024, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_1')(input)
-#     x = batchRelu(x, 'bn_up_1')
-#     x = Conv2D(512, (3,3), strides=(1,1), padding = 'same')(x)
-#     x = batchRelu(x, 'bn_conv_1')
-#     modelx = Model(model.input, x, name = 'debug_x')
-#     modelx.summary()
-#     # x = BatchNormalization(name = 'bn_up_1')(x)
-#     # x = ReLU()(x)
-
-#     x = Conv2DTranspose(512, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_2')(x)
-#     x = batchRelu(x, 'bn_up_2')
-#     x = Conv2D(256, (3,3), strides=(1,1), padding = 'same')(x)
-#     x = batchRelu(x, 'bn_conv_2')
-    
-#     # x = BatchNormalization(name = 'bn_up_2')(x)
-#     # x = ReLU()(x)
-
-#     x = Conv2DTranspose(256, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_3')(x)
-#     x = batchRelu(x, 'bn_up_3')
-#     x = Conv2D(128, (3,3), strides=(1,1), padding = 'same')(x)
-#     x = batchRelu(x, 'bn_conv_3')
-    
-#     # x = BatchNormalization(name = 'bn_up_3')(x)
-#     # x = ReLU()(x)
-
-#     x = Conv2DTranspose(128, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_4')(x)
-#     x = batchRelu(x, 'bn_up_4')
-#     x = Conv2D(64, (3,3), strides=(1,1), padding = 'same')(x)
-#     x = batchRelu(x, 'bn_conv_4')
-    
-#     # x = BatchNormalization(name = 'bn_up_4')(x)
-#     # x = ReLU()(x)
-
-#     x = Conv2D(35, (1,1), strides=(1,1), padding = 'same', name='conv_final')(x)
-#     x = tf.nn.softmax(x)
-#     return x
-
 def resNet50V2Dec(input):
     x = Conv2DTranspose(1024, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_1')(input)
     x = BatchNormalization(name = 'bn_up_1')(x)
@@ -120,5 +82,11 @@ def resNet50V2Model(filePath):
     show_layer_names=True, rankdir='TB', expand_nested=False, dpi=96)
     # model.summary()
     
+    if(filePath != ''):
+        print('copying weights')
+        model = tf.keras.models.load_model(filePath, compile=False)
+        aux_model.set_weights(model.get_weights()) 
+    
+
     return aux_model
 

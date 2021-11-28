@@ -19,11 +19,11 @@ import labels as lb
 import tensorflow.keras as keras
 from resnet import *
 from resnet50v2 import *
-from lowMemoryModel import *
 from attModel import *
 from tensorflow.keras import backend as K
 
 from twilio.rest import Client
+from tqdm import tqdm
 
 
 # ============== #
@@ -77,9 +77,9 @@ if gpus:
     print(e)
 
 
-initial_learning_rate = 0.01
+initial_learning_rate = 0.005
 lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
-    initial_learning_rate, 75000, end_learning_rate=0.0007, power=2.0,
+    initial_learning_rate, 100000, end_learning_rate=0.0005, power=2.0,
     cycle=False, name=None
 )
 
@@ -110,23 +110,25 @@ def readFiles(dataset, index):
     pathLabels = args.dataset_labels_path
     width = args.img_width
     height = args.img_height
-    
+
     if(args.dataset == 'cityscapes'):
         addPathImg = '*/*_leftImg8bit.png'
         addPathLabel = '*/*_labelIds.png'
     elif(args.dataset == 'kitti'):
-        addPathImg = 'image_2/*.png'
-        addPathLabel = 'semantic/*.png'
+        addPathImg = '/image_2/*.png'
+        addPathLabel = '/semantic/*.png'
     else:
-        addPathImg = '/images/*.jpg'
-        addPathLabel = '/v2.0/instances/*.png'
+        #Mapillary
+        addPathImg = 'images/*.jpg'
+        addPathLabel = 'v2.0/instances/*.png'
 
-    print(pathImages + dataset + '*/' + addPathImg)
+    print(pathImages + '/' + dataset + '*/' + addPathImg)
+    print(pathLabels + '/' + dataset + '*/' + addPathLabel)
     if(pathLabels == ''):
-        image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], '', height, width)
+        image, label = dl._parse_function(sorted(glob(pathImages + '/' + dataset + '*/' + addPathImg))[index], '', height, width)
     else:
-        image, label = dl._parse_function(sorted(glob(pathImages + dataset + '*/' + addPathImg))[index], 
-                                        sorted(glob(pathLabels + dataset + '*/' + addPathLabel))[index],
+        image, label = dl._parse_function(sorted(glob(pathImages + '/' + dataset + '*/' + addPathImg))[index], 
+                                        sorted(glob(pathLabels + '/' + dataset + '*/' + addPathLabel))[index],
                                         height, width)
 
     return image, label
@@ -134,6 +136,7 @@ def readFiles(dataset, index):
 def predictRand(model, dataset, index, filename='eval_truck'):
 
     image, label = readFiles(dataset, index)
+    image_disp = np.copy(image)
     image_disp = image/2. + 0.5 #0 to 1 (plot)
 
     if(args.dataset_labels_path != ''):
@@ -158,7 +161,7 @@ def predictRand(model, dataset, index, filename='eval_truck'):
     imgList.append({'title' : 'Label', 'img' : label_disp})
     imgList.append({'title' : 'Final Pred', 'img' : pred_disp})
     
-    displayImage(imgList, image_disp, label_disp, pred_disp, filename)
+    displayImage(imgList, filename)
         
 def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFull'):
 
@@ -174,7 +177,6 @@ def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFu
 
     image_inputS1 = np.expand_dims(image, axis=0) 
     image_inputS2 = tf.image.resize(image_inputS1, (1024, 2048)) #testing
-
     
     #run model
     predS1, predTruckS1 = model([image_inputS1], training=False)
@@ -206,9 +208,9 @@ def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFu
     # imgList.append({'title' : 'Att Mask', 'img' : attMask})
     imgList.append({'title' : 'Final Pred Att', 'img' : finalPred_disp})
 
-    displayImage(imgList, image_disp, label_disp, finalPred_disp, filename)
+    displayImage(imgList, filename)
 
-def displayImage(imgList, image, label, finalPred, filename = "test.png"):
+def displayImage(imgList, filename = "test.png"):
     fig = plt.figure(figsize=(15, 15))
 
     nColuns = 3
@@ -218,7 +220,8 @@ def displayImage(imgList, image, label, finalPred, filename = "test.png"):
         fig.add_subplot(nLines, nColuns, index + 1)
         plt.imshow(img['img'], interpolation='bilinear')
         plt.title(img['title'])
-        
+
+    # plt.show()
     plt.savefig(filename)
 
 
@@ -236,13 +239,14 @@ def trainTruck(model, trainDataset, valDataset, sizes):
     iou_sum = 0
     iou_sum_max = 0
     train_sum_loss_min = 1000
-    for e in range(num_epochs):
+
+    for e in tqdm(range(num_epochs)):
         train_sum_loss = 0
         batchIndex = 0
 
-        for batchData in trainDataset:
+        for batchData in tqdm(trainDataset):
             
-            print('\rEpoch {}/{} | batch {}/{} {}{} loss: {}'.format(e + 1, num_epochs, batchIndex, num_batches, '>'*int(batchIndex/50), '-'*int((num_batches-batchIndex)/50), train_sum_loss), end='', flush=True)
+            # print('\rEpoch {}/{} | batch {}/{} {}{} loss: {}'.format(e + 1, num_epochs, batchIndex, num_batches, '>'*int(batchIndex/50), '-'*int((num_batches-batchIndex)/50), train_sum_loss), end='', flush=True)
             
             images, labels = batchData
             
@@ -291,7 +295,7 @@ def trainTruck(model, trainDataset, valDataset, sizes):
                 if(e > 0.6*num_epochs and args.save_model_path != ""):
                     print("Saving model in " + args.save_model_path + "...")
                     model.save(args.save_model_path)
-        
+
         else:
             if(train_sum_loss < train_sum_loss_min):
                 train_sum_loss_min = train_sum_loss
@@ -327,15 +331,8 @@ def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
             
             imageS1, imageS2, label = batchData
             
-            #images before training
             predS1, predTruckS1 = model([imageS1], training=False)
             predS2, predTruckS2 = model([imageS2], training=False)
-    
-            
-            # predTruckS1 = truck([imageS1])[0]
-            # predS1 = segHead([predTruckS1])[0]
-            # predTruckS2 = truck([imageS2])[0]
-            # predS2 = segHead([predTruckS2])[0]
             
             with tf.GradientTape() as tape:
                 finalPred = attModel([predTruckS1, predS1, predS2], training = True)
@@ -364,13 +361,7 @@ def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
             predS1, predTruckS1 = model([imageS1], training=False)
             predS2, predTruckS2 = model([imageS2], training=False)
     
-            # predTruckS1 = truck([imageS1])[0]
-            # predS1 = segHead([predTruckS1])[0]
-            # predTruckS2 = truck([imageS2])[0]
-            # predS2 = segHead([predTruckS2])[0]
-            
-            # finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
-            finalPred = attModel([predTruckS1, predS1, predS2], training = False)
+            finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
             iou = iou_coef(label, finalPred)
  
             val_loss = loss(finalPred, label)
@@ -395,8 +386,7 @@ def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
 
 def inferData(model, attModel, inferDataset):
     
-
-    firstLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float) #?
+    # firstLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float) #?
     previusLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float)
     currentLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float)
 
@@ -406,10 +396,7 @@ def inferData(model, attModel, inferDataset):
 
         predS1, predTruckS1 = model([imageS1], training=False)
         predS2, predTruckS2 = model([imageS2], training=False)
-        # print("fileName: ", fileName[-10:-1])
-        # print("predS1 shape: ", predS1.shape)
-        # print("predTruckS1 shape: ", predTruckS1.shape)
-        # print("predS2 shape: ", predS2.shape)
+     
         finalPred, attMask = attModel([predTruckS1, predS1, predS2], training = False)
         image = np.squeeze(finalPred)
         
@@ -454,23 +441,18 @@ def main():
         print('Using trained model')
         model = keras.models.load_model(args.load_model_path, compile=False)
 
-    # load data
-    # trainDataset, valDataset, _, sizes = dl.loadDataset(args)
-
-    # model.summary()
 
     if(args.mode == 'train'):
         print('Training network truck')
         trainDataset, valDataset, _, sizes = dataset.loadDataset()
-        predictRand(model, 'train', index=10, filename='beforeTrain.png')
-        print(len(trainDataset))
+        predictRand(model, 'train', index=10, filename= 'beforeTrain.png')
         trainTruck(model, trainDataset, valDataset, sizes)
-        predictRand(model, 'train', index=10, filename='afterTrain.png')
+        predictRand(model, 'train', index=10, filename= 'afterTrain.png')
     
     elif(args.mode == 'att'):
         print('Training network attention')
         trainDataset, valDataset, _, sizes = dataset.loadDataset()
-        attModel = createAttModel(args.load_att_path)
+        attModel = createAttModel(args.load_att_path, args.img_height, args.img_width)
         predictAttention(model, attModel, 'val', index=1)
         trainAtt(model, attModel, trainDataset, valDataset, sizes)
         predictAttention(model, attModel, 'val', filename='afterTrainAtt')
@@ -481,19 +463,19 @@ def main():
 
     elif(args.mode == 'eval_att'):
         print('infering att example')
-        attModel = createAttModel(args.load_att_path)
+        attModel = createAttModel(args.load_att_path, args.img_height, args.img_width)
         predictAttention(model, attModel, 'val', index=1, filename='testAttNewModel')
     
     elif(args.mode == 'inf_dataset'):
         attModel = createAttModel(args.load_att_path, args.img_height, args.img_width)
-        attModel.save("att1V2.h5")
+        # attModel.save("att1V2.h5")
         print('infering folder: ', args.dataset_images_path)
         inferDataset = dataset.loadInferDataset()
-        # attModel = createAttModel(args.load_att_path)
         inferData(model, attModel, inferDataset)
     else:
         print(args.mode, " not supported")
         return
+
     # if(args.save_model_path != ""):
     #     print("Saving model in " + args.save_model_path + "...")
     #     model.save(args.save_model_path)

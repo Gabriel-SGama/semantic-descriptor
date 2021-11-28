@@ -29,6 +29,8 @@ from keras_applications.imagenet_utils import _obtain_input_shape
 from tensorflow.keras.applications.imagenet_utils import decode_predictions
 from tensorflow.keras import backend as K
 
+#test tf.shape() for on the fly resize
+
 def createAttModel(filePath, img_height, img_width):
     # if(filePath != ''):
     #     print('Using load Model')
