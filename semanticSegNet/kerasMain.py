@@ -12,6 +12,7 @@ import random
 
 from tensorflow.python.keras.engine import training
 from PIL import Image
+from adabelief_tf import AdaBeliefOptimizer
 
 #local imports
 import dataloader as dl
@@ -43,12 +44,15 @@ parser.add_argument('--mode', type=str, help='train or test', default='train')
 parser.add_argument('--dataset', type=str, help='mapillary or cityscapes', required=True)
 parser.add_argument('--dataset_images_path', type=str, help='image path', required=True)
 parser.add_argument('--dataset_labels_path', type=str, help='label path', default="")
+parser.add_argument('--dataset_extra_images_path', type=str, help='path for extra images - cityscapes', required=True)
+parser.add_argument('--dataset_auto_labels_path', type=str, help='auto label path for extra images - cityscapes', default="")
 parser.add_argument('--dataset_infer_path', type=str, help='infer path', default="")
 parser.add_argument('--dataset_save_infer_path', type=str, help='save infer path', default="")
 parser.add_argument('--img_width', type=int, help='image width', required=True)
 parser.add_argument('--img_height', type=int, help='image height', required=True)
 parser.add_argument('--num_epochs', type=int, help='number of epochs of training', required=True)
 parser.add_argument('--batch_size', type=int, help='batch size', required=True)
+parser.add_argument('--learning_rate', type=float, help='inicial learning rate', default=0.01)
 parser.add_argument('--GPU', type=str, help='GPU number', required=True)
 parser.add_argument('--save_model_path', type=str, help='directory where to save model', default="")
 parser.add_argument('--pre_train_model_path', type=str, help='directory to load pre trained model on Mapillary', default="")
@@ -77,13 +81,15 @@ if gpus:
     print(e)
 
 
-initial_learning_rate = 0.005
+initial_learning_rate = args.learning_rate
 lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
-    initial_learning_rate, 100000, end_learning_rate=0.0005, power=2.0,
+    initial_learning_rate, int(500000/args.batch_size), end_learning_rate=0.0007, power=2.0,
     cycle=False, name=None
 )
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, epsilon=1e-07, amsgrad=False, name='Adam')
+optimizer = AdaBeliefOptimizer(learning_rate=lr_schedule, epsilon=1e-14, rectify=False)
+
+# optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, epsilon=1e-07, amsgrad=False, name='Adam')
 
 
 def loss(pred, target):
@@ -162,7 +168,8 @@ def predictRand(model, dataset, index, filename='eval_truck'):
     imgList.append({'title' : 'Final Pred', 'img' : pred_disp})
     
     displayImage(imgList, filename)
-        
+
+
 def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFull'):
 
     image, label = readFiles(index)
@@ -210,6 +217,7 @@ def predictAttention(model, attModel, dataset, index = 10, filename = 'testAttFu
 
     displayImage(imgList, filename)
 
+
 def displayImage(imgList, filename = "test.png"):
     fig = plt.figure(figsize=(15, 15))
 
@@ -221,13 +229,17 @@ def displayImage(imgList, filename = "test.png"):
         plt.imshow(img['img'], interpolation='bilinear')
         plt.title(img['title'])
 
-    # plt.show()
-    plt.savefig(filename)
+    plt.show()
+    # plt.savefig(filename)
 
 
 def trainTruck(model, trainDataset, valDataset, sizes):
-
-    logdir = "logs/scalars/" + args.metrics_path + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    if(args.metrics_path == ''):
+        logdir = "logs/scalars/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        logdir = "logs/scalars/" + args.metrics_path
+    
     file_writer_train = tf.summary.create_file_writer(logdir + "_train")
     file_writer_val = tf.summary.create_file_writer(logdir + "_val")
 
@@ -240,16 +252,18 @@ def trainTruck(model, trainDataset, valDataset, sizes):
     iou_sum_max = 0
     train_sum_loss_min = 1000
 
-    for e in tqdm(range(num_epochs)):
+    # np.set_printoptions(threshold=sys.maxsize)
+    for e in tqdm(range(num_epochs), bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
         train_sum_loss = 0
         batchIndex = 0
 
-        for batchData in tqdm(trainDataset):
+        for batchData in tqdm(trainDataset, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
             
             # print('\rEpoch {}/{} | batch {}/{} {}{} loss: {}'.format(e + 1, num_epochs, batchIndex, num_batches, '>'*int(batchIndex/50), '-'*int((num_batches-batchIndex)/50), train_sum_loss), end='', flush=True)
-            
+
             images, labels = batchData
-            
+            # print(labels.shape)
+       
             # train_loss = train(model, images, labels)
             with tf.GradientTape() as tape:
                 pred, inter_out = model(images, training = True)        
@@ -257,7 +271,14 @@ def trainTruck(model, trainDataset, valDataset, sizes):
 
             grads = tape.gradient(train_loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
-
+            # image_disp = images[0]/2. + 0.5 #0 to 1 (plot)
+            # label_disp = makePredImg(labels[0])
+            # pred_disp = makePredImg(pred[0])
+            # imgList = []
+            # imgList.append({'title' : 'Original', 'img' : image_disp})
+            # imgList.append({'title' : 'Label', 'img' : label_disp})
+            # imgList.append({'title' : 'Pred', 'img' : pred_disp})
+            # displayImage(imgList)
             train_sum_loss = tf.reduce_mean(train_loss)
 
             with file_writer_train.as_default():
@@ -267,42 +288,36 @@ def trainTruck(model, trainDataset, valDataset, sizes):
             i += 1
             batchIndex += 1
 
-        if(args.dataset != 'kitti'):
-            #evaluate validations set
-            val_sum_loss = 0
-            iou_sum = 0
-            for batchData in valDataset:
-                images, labels = batchData
-                pred, _ = model(images, training = False)
-                iou = iou_coef(labels, pred)
-    
-                val_loss = loss(pred, labels)
-                iou_sum += iou
-                
-                val_sum_loss += tf.reduce_mean(val_loss)
+        #evaluate validations set
+        val_sum_loss = 0
+        iou_sum = 0
+        for batchData in valDataset:
+            images, labels = batchData
+            pred, _ = model(images, training = False)
+            iou = iou_coef(labels, pred)
 
-            val_sum_loss /= (sizes['val']/args.batch_size)
-            iou_sum /= (sizes['val']/args.batch_size)
+            val_loss = loss(pred, labels)
+            iou_sum += iou
             
-            with file_writer_val.as_default():
-                tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
-                tf.summary.scalar(f'iou', data=iou_sum, step=i)
+            val_sum_loss += tf.reduce_mean(val_loss)
 
-            #saves model if is the best result and it is 60% complete
-            if(iou_sum > iou_sum_max):
-                iou_sum_max = iou_sum
+        val_sum_loss /= (sizes['val']/args.batch_size)
+        iou_sum /= (sizes['val']/args.batch_size)
+        
+        with file_writer_val.as_default():
+            tf.summary.scalar(f'loss', data=val_sum_loss, step=i)
+            tf.summary.scalar(f'iou', data=iou_sum, step=i)
 
-                if(e > 0.6*num_epochs and args.save_model_path != ""):
-                    print("Saving model in " + args.save_model_path + "...")
-                    model.save(args.save_model_path)
+        #saves model if is the best result and it is 60% complete
+        if(iou_sum > iou_sum_max):
+            iou_sum_max = iou_sum
 
-        else:
-            if(train_sum_loss < train_sum_loss_min):
-                train_sum_loss_min = train_sum_loss
+            if(e > 0.6*num_epochs and args.save_model_path != ""):
+                print("Saving model in " + args.save_model_path + "...")
+                model.save(args.save_model_path)
 
-                if(e > 0.6*num_epochs and args.save_model_path != ""):
-                    print("Saving model in " + args.save_model_path + "...")
-                    model.save(args.save_model_path)
+    tf.summary.flush(writer=file_writer_train, name=None)
+    tf.summary.flush(writer=file_writer_val, name=None)
     
     print("EPOCHS = " + str(num_epochs))
     print("IOU MAX = " + str(iou_sum_max))
@@ -310,7 +325,11 @@ def trainTruck(model, trainDataset, valDataset, sizes):
 
 def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
 
-    logdir = "logs/scalars/" + args.metrics_path + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    if(args.metrics_path == ''):
+        logdir = "logs/scalars/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        logdir = "logs/scalars/" + args.metrics_path
+    
     file_writer_train = tf.summary.create_file_writer(logdir + "_train")
     file_writer_val = tf.summary.create_file_writer(logdir + "_val")
 
@@ -384,6 +403,7 @@ def trainAtt(model, attModel, trainDataset, valDataset, sizes): #simplify later
 
     # sendMessage(iou_sum_max, num_epochs)
 
+
 def inferData(model, attModel, inferDataset):
     
     # firstLogOdd = np.zeros((args.img_height, args.img_width, 35), dtype=np.float) #?
@@ -445,9 +465,9 @@ def main():
     if(args.mode == 'train'):
         print('Training network truck')
         trainDataset, valDataset, _, sizes = dataset.loadDataset()
-        predictRand(model, 'train', index=10, filename= 'beforeTrain.png')
+        # predictRand(model, 'train', index=10, filename= 'beforeTrain.png')
         trainTruck(model, trainDataset, valDataset, sizes)
-        predictRand(model, 'train', index=10, filename= 'afterTrain.png')
+        # predictRand(model, 'train', index=10, filename= 'afterTrain.png')
     
     elif(args.mode == 'att'):
         print('Training network attention')

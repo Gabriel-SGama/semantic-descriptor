@@ -77,9 +77,9 @@ def resNet50V2Model(filePath):
     aux_model = Model(inputs=model.inputs,
                            outputs=model.outputs + [model.get_layer('post_relu').output])
 
-    tf.keras.utils.plot_model(
-    aux_model, to_file='model.png', show_shapes=True,
-    show_layer_names=True, rankdir='TB', expand_nested=False, dpi=96)
+    #tf.keras.utils.plot_model(
+    #aux_model, to_file='model.png', show_shapes=True,
+    #show_layer_names=True, rankdir='TB', expand_nested=False, dpi=96)
     # model.summary()
     
     if(filePath != ''):
