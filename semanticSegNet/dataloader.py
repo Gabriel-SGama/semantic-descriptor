@@ -1,3 +1,4 @@
+from base64 import encode
 import tensorflow as tf
 import tensorflow_addons as tfa
 import random
@@ -6,6 +7,8 @@ import numpy as np
 import cv2
 
 from glob import glob
+
+import labels as lb
 
 class dataloader:
     
@@ -80,10 +83,11 @@ class dataloader:
 
         trainDataset = tf.data.Dataset.from_tensor_slices((trainImages, trainLabels))
         trainDataset = trainDataset.map(self._parse_function_data_att, num_parallel_calls = AUTOTUNE) if(self.mode == 'att') else trainDataset.map(self._parse_function_data_aug, num_parallel_calls = AUTOTUNE)
+        # trainDataset = trainDataset.map(self._parse_function, num_parallel_calls = AUTOTUNE)
         trainDataset = configure_for_performance(trainDataset, self.batch_size, AUTOTUNE)
 
         valDataset = tf.data.Dataset.from_tensor_slices((valImages, valLabels))
-        valDataset = valDataset.map(self._parse_function, num_parallel_calls = AUTOTUNE)
+        valDataset = valDataset.map(self._parse_function_att, num_parallel_calls = AUTOTUNE) if(self.mode == 'att') else valDataset.map(self._parse_function, num_parallel_calls = AUTOTUNE)
         valDataset = configure_for_performance(valDataset, self.batch_size, AUTOTUNE)
 
         # testDataset = tf.data.Dataset.from_tensor_slices((testImages, testLabels))
@@ -93,17 +97,22 @@ class dataloader:
         return trainDataset, valDataset, None, sizeDict
 
 
-    def boundryLabelRelaxation(self, label):
-        # Convolve label for boundry relaxation
-        kernel = np.ones((3, 3, 1, 1), np.float32) / 9.0
-        # kernel = np.expand_dims(kernel, -1)
-        # kernel = np.expand_dims(kernel, -1)
+    # def boundryLabelRelaxation(self, label):
+    #     # Convolve label for boundry relaxation
+    #     kernel = np.ones((3,3, 1, 20), np.float32)
+    #     # kernel = np.expand_dims(kernel, -1)
+    #     # kernel = np.expand_dims(kernel, -1)
 
-        label = tf.expand_dims(label, -1)
-        label = tf.nn.depthwise_conv2d(label, kernel, strides=[1,1,1,1], padding='SAME')
-        label = tf.squeeze(label, -1)
-        
-        return label
+    #     # print("label tf.shape: ",tf.shape(label))
+    #     label = tf.expand_dims(label, 0)
+    #     # label = tf.expand_dims(label, -1)
+    #     # print("label tf.shape: ",tf.shape(label))
+    #     label = tf.nn.conv2d(label, kernel, strides=1, padding='SAME')
+    #     label = tf.squeeze(label, 0)
+    #     # print("label tf.shape: ",tf.shape(label))
+    #     label = tf.clip_by_value(label,  0, 1)
+
+    #     return label
 
 
     @tf.function
@@ -111,7 +120,7 @@ class dataloader:
 
         if(tf.shape(image)[0] < 2*self.img_height or tf.shape(image)[1] < 2*self.img_width):
             image = tf.image.resize(image, (2*self.img_height, 2*self.img_width))
-            label = tf.image.resize(label, (self.img_height, self.img_width))
+            label = tf.image.resize(label, (2*self.img_height, 2*self.img_width))
 
         offset_height = tf.random.uniform(shape=[], minval=0, maxval=self.img_height, dtype=tf.int32)
         offset_width = tf.random.uniform(shape=[], minval=0, maxval=self.img_width, dtype=tf.int32)
@@ -122,6 +131,15 @@ class dataloader:
         label = tf.image.resize(label, (int(self.img_height/2), int(self.img_width/2)))
 
         return image, label
+
+    # def encode_labels(self, mask):
+    #     for k in lb.labelsID:
+    #         print(k)
+    #         id = k[0]
+    #         trainID = k[1]
+    #         print(id)
+    #         mask[mask == id] = trainID
+    #     return mask
 
 
     @tf.function
@@ -135,7 +153,19 @@ class dataloader:
         label = tf.io.read_file(labelfile)
         label = tf.image.decode_image(label, expand_animations = False, channels = 1)
 
+        # label = tf.squeeze(tf.cast(label, tf.uint8), 2)
+
+        # print(lb.labelsID)
+
+        # label = lb.labelsID[label] if lb.labelsID[label] != 255 and lb.labelsID[label] != -1 else 19
+        # label = self.encode_labels(label)
+        # label = tf.cast(tf.one_hot(label, depth=20), tf.float32)
         label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
+        # (7,8,11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33)
+        # print(label.shape)
+        # label = tf.gather_nd(label, lb.idx)
+        # print(label.shape)
+
         return image, label
 
     @tf.function
@@ -180,30 +210,34 @@ class dataloader:
     @tf.function
     def _parse_function_data_att(self, filename, label):
         #image input
-        imageS2 = tf.io.read_file(filename)
-        imageS2 = tf.image.decode_image(imageS2, expand_animations = False, channels = 3)
-        imageS2 = tf.cast(imageS2, tf.float32)/255.
+        image = tf.io.read_file(filename)
+        image = tf.image.decode_image(image, expand_animations = False, channels = 3)
+        image = tf.cast(image, tf.float32)/255.
+
+        imageS1 = tf.image.resize(image, (self.img_height, self.img_width)) #scale 1 
+        imageS2 = tf.image.resize(image, (2*self.img_height, 2*self.img_width))
 
         chance_aug_img = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
+        imageS1 = tf.cond(chance_aug_img, lambda: imageS1, lambda: augmentImageGBC(imageS1))
         imageS2 = tf.cond(chance_aug_img, lambda: imageS2, lambda: augmentImageGBC(imageS2))
 
+        imageS1 = 2.*(imageS1-0.5) #-1 to 1
         imageS2 = 2.*(imageS2-0.5) #-1 to 1
-        imageS1 = tf.image.resize(imageS2, (self.img_height, self.img_width)) #scale 1 
 
         #label
         label = tf.io.read_file(label)
         label = tf.image.decode_image(label, expand_animations = False, channels = 1)
         label = tf.cast(label, tf.uint8)
-        label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=35), tf.float32)
+        label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=20), tf.float32)
 
         #rotation
         chance_rot = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
         rot_angle =  random.uniform(-0.0872665, 0.0872665)
         imageS1 = tf.cond(chance_rot, lambda: imageS1, lambda: rotateImg(imageS1, rot_angle, [self.img_height, self.img_width]))
-        imageS2 = tf.cond(chance_rot, lambda: imageS2, lambda: rotateImg(imageS2, rot_angle, [self.img_height, self.img_width]))
+        imageS2 = tf.cond(chance_rot, lambda: imageS2, lambda: rotateImg(imageS2, rot_angle, [2*self.img_height, 2*self.img_width]))
 
         label = tf.image.resize(label, (self.img_height, self.img_width))
-        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [self.img_height/2, self.img_width/2]))
+        label = tf.cond(chance_rot, lambda: label, lambda: rotateImg(label, rot_angle, [int(self.img_height), int(self.img_width)]))
 
         #flip
         chance_flip = tf.random.uniform(shape=[], minval=0., maxval=1., dtype=tf.float32) > 0.5
@@ -211,7 +245,30 @@ class dataloader:
         imageS2 = tf.cond(chance_flip, lambda: imageS2, lambda: tf.image.flip_left_right(imageS2))
         label = tf.cond(chance_flip, lambda: label, lambda: tf.image.flip_left_right(label))
 
-       
+        return imageS1, imageS2, label
+
+
+    @tf.function
+    def _parse_function_att(self, filename, label):
+        #image input
+        image = tf.io.read_file(filename)
+        image = tf.image.decode_image(image, expand_animations = False, channels = 3)
+        image = tf.cast(image, tf.float32)/255.
+
+        imageS1 = tf.image.resize(image, (self.img_height, self.img_width)) #scale 1 
+        imageS2 = tf.image.resize(image, (2*self.img_height, 2*self.img_width))
+
+        imageS1 = 2.*(imageS1-0.5) #-1 to 1
+        imageS2 = 2.*(imageS2-0.5) #-1 to 1
+        
+        #label
+        label = tf.io.read_file(label)
+        label = tf.image.decode_image(label, expand_animations = False, channels = 1)
+        label = tf.cast(label, tf.uint8)
+        label = tf.cast(tf.one_hot(tf.squeeze(tf.cast(label, tf.uint8), 2), depth=20), tf.float32)
+
+        label = tf.image.resize(label, (self.img_height, self.img_width))
+
         return imageS1, imageS2, label
 
 
@@ -347,7 +404,6 @@ def rotateImg(image, rot_angle, size):
     # cval=0.0, interpolation_order=1)
     
     image = tfa.image.rotate(image, rot_angle, interpolation = 'nearest')
-    
     offset_height = tf.cast((new_height - size[0])/2, tf.int32)
     offset_width = tf.cast((new_width - size[1])/2, tf.int32)
 

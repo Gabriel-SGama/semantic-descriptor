@@ -303,13 +303,12 @@ class BasicSynchronousClient(object):
 			i = np.array(self.semantic_image.raw_data)
 
 			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
+			print(i2)
 			i3 = i2[:, :, :3]
-
 			self.semantic = i2
 			cv2.imshow("semantic_image", self.semantic)
 
-	def save(self, count, video_out, file_ptr, ini):
-		
+	def save(self, count, video_out, file_ptr, ini, time_ptr, time):
 		pos = self.car.get_transform()
 		
 		phi = pos.rotation.roll
@@ -329,12 +328,18 @@ class BasicSynchronousClient(object):
 		r33 = np.cos(theta)*np.cos(psi)
 		tz = pos.location.z - ini[2]
 		str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n" .format(
-			r11,r12,r13,tx,r21,r22,r23,ty,r31,r32,r33,tz)
+			r11,r12,r13,tx,r31,r32,r33,tz,r21,r22,r23,ty) #TODO check z axis orientation
+		
+		# str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n" .format(
+		# 	r11,r12,r13,tx,r21,r22,r23,ty,r31,r32,r33,tz)
 
 		# str_pos = "x:{:.4f}, y:{:.4f}, z:{:.4f}, roll:{:.4f}, pitch:{:.4f}, yaw:{:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
 		# str_pos = "{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(pos.location.x, pos.location.y, pos.location.z, pos.rotation.roll, pos.rotation.pitch, pos.rotation.yaw)
 		file_ptr.write(str_pos)
-		
+
+		time_str = "{:.6f}\n" .format(time)
+		time_ptr.write(time_str)
+
 		if self.image is not None:
 			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
 			array = np.reshape(array, (self.image.height, self.image.width, 4))
@@ -422,12 +427,15 @@ class BasicSynchronousClient(object):
 			#out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
 			file_ptr = open('pos_' + FILE_NAME + '.txt', 'w')
+			time_ptr = open('times.txt', 'w')
 
 			pos = self.car.get_transform()
 			ini_x = pos.location.x
 			ini_y = pos.location.y
 			ini_z = pos.location.z
 			ini = [ini_x, ini_y, ini_z]
+
+			begin_t = time.time()
 
 			while True:
 				self.world.tick()
@@ -438,8 +446,8 @@ class BasicSynchronousClient(object):
 				self.render(self.display, count)
 				#self.depth_render(self.depth_display, count)
 				self.semantic_render(self.semantic_display, count)
-
-				self.save(count, out_camera, file_ptr, ini)
+				curr_t = time.time()
+				self.save(count, out_camera, file_ptr, ini, time_ptr, curr_t-begin_t)
 				#self.depth_save(count, out_depth)
 				self.semantic_save(count, out_seg)
 				pygame.display.flip()

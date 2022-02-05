@@ -82,10 +82,10 @@ def resNet50V2Model(filePath):
     #show_layer_names=True, rankdir='TB', expand_nested=False, dpi=96)
     # model.summary()
     
-    if(filePath != ''):
-        print('copying weights')
-        model = tf.keras.models.load_model(filePath, compile=False)
-        aux_model.set_weights(model.get_weights()) 
+    # if(filePath != ''):
+    #     print('copying weights')
+    #     model = tf.keras.models.load_model(filePath, compile=False)
+    #     aux_model.set_weights(model.get_weights()) 
     
 
     return aux_model

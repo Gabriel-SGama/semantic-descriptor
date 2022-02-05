@@ -1,2 +1,2 @@
 cd /opt/carla-simulator
-./CarlaUE4.sh Town02
+./CarlaUE4.sh -quality-level=Epic -opengl

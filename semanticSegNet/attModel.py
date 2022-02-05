@@ -38,17 +38,39 @@ def createAttModel(filePath, img_height, img_width):
     #     return model
     
     
-    print('Creating new model')
+    print('Creating new attention model')
+    # truckH =  tf.constant(int(img_height/32))
+    # truckW =  tf.constant(int(img_width/32))
+
+    # S1H =  tf.constant(int(img_height/2))
+    # S1W =  tf.constant(int(img_width/2))
+
+    # S2H =  tf.constant(int(img_height))
+    # S2W =  tf.constant(int(img_width))
+
 
     # s1TruckInput = tf.keras.layers.Input(dtype=tf.float32, shape=(16, 32, 2048), name ='s1TruckInput') #resnet truck input
     # s1Input = tf.keras.layers.Input(dtype=tf.float32, shape=(256,512,35), name ='s1Input') #scale 1
     # s2Input = tf.keras.layers.Input(dtype=tf.float32, shape=(512,1024,35), name ='s2Input') #scale 2
 
-    s1TruckInput = tf.keras.layers.Input(dtype=tf.float32, shape=(int(img_height/32), int(img_width/32), 2048), name ='s1TruckInput') #resnet truck input
-    s1Input = tf.keras.layers.Input(dtype=tf.float32, shape=(int(img_height/2),int(img_width/2), 35), name ='s1Input') #scale 1
-    s2Input = tf.keras.layers.Input(dtype=tf.float32, shape=(img_height, img_width, 35), name ='s2Input') #scale 2
+    # s1TruckInput = tf.keras.layers.Input(dtype=tf.float32, shape=(int(img_height/32), int(img_width/32), 2048), name ='s1TruckInput') #resnet truck input
+    # s1Input = tf.keras.layers.Input(dtype=tf.float32, shape=(int(img_height/2),int(img_width/2), 35), name ='s1Input') #scale 1
+    # s2Input = tf.keras.layers.Input(dtype=tf.float32, shape=(img_height, img_width, 35), name ='s2Input') #scale 2
+
+    # s1TruckInput = tf.keras.layers.Input(dtype=tf.float32, shape=(truckH, truckW, 2048), name ='s1TruckInput') #resnet truck input
+    # s1Input = tf.keras.layers.Input(dtype=tf.float32, shape=(S1H,S1W, 35), name ='s1Input') #scale 1
+    # s2Input = tf.keras.layers.Input(dtype=tf.float32, shape=(S2H, S2W, 35), name ='s2Input') #scale 2
+
+    s1TruckInput = tf.keras.layers.Input(dtype=tf.float32, shape=(None, None, 2048), name ='s1TruckInput') #resnet truck input
+    s1Input = tf.keras.layers.Input(dtype=tf.float32, shape=(None,None, 35), name ='s1Input') #scale 1
+    s2Input = tf.keras.layers.Input(dtype=tf.float32, shape=(None, None, 35), name ='s2Input') #scale 2
+
+    # x = Conv2D(516, (3,3), strides=(1,1), padding = 'same')(s1TruckInput)
+    # x = BatchNormalization()(x)
+    # x = ReLU()(x)
 
     x = Conv2DTranspose(516, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_att_1')(s1TruckInput)
+    # x = Conv2DTranspose(516, (3,3), strides=(2,2), padding = 'same', name = 'conv_up_att_1')(x)
     # x = Conv2D(516, (3,3), strides=(1,1), padding = 'same')(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
