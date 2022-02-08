@@ -27,6 +27,8 @@ import glob
 import os
 import sys
 
+from matplotlib import image
+
 try:
     # sys.path.append(glob.glob('/opt/carla-simulator/PythonAPI/carla/dist-*%d.%d-%s.egg' % (
 	sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
@@ -184,6 +186,7 @@ class BasicSynchronousClient(object):
 
 		semantic_camera_transform = carla.Transform(carla.Location(x=0, z=3.2), carla.Rotation(pitch=0))
 		self.semantic_camera = self.world.spawn_actor(self.camera_blueprint('semantic_segmentation'), semantic_camera_transform, attach_to=self.car)
+		# self.semantic_camera.listen(lambda image: image.save_to_disk('%.6d.jpg' % image.frame,carla.ColorConverter.CityScapesPalette))
 		weak_semantic_self = weakref.ref(self)
 		self.semantic_camera.listen(lambda semantic_image: weak_semantic_self().set_semantic_image(weak_semantic_self, semantic_image))
 
@@ -277,6 +280,7 @@ class BasicSynchronousClient(object):
 		"""
 		if self.image is not None:
 			# self.image.save_to_disk("../carlaData/image/img" + str(count) + ".png")
+			# self.image.save_to_disk("image_2/%06d.png" % count)
 			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
 			array = np.reshape(array, (self.image.height, self.image.width, 4))
 			array = array[:, :, :3]
@@ -296,16 +300,21 @@ class BasicSynchronousClient(object):
 
 	def semantic_render(self, semantic_display, count):
 		if self.semantic_image is not None:
-			# self.semantic_image.save_to_disk("../carlaData/semantic/sem" + str(count) + ".png")
+			# self.semantic_image.save_to_disk("../carlaData/sem/id%06d.png" % count)
+			# self.semantic_image.save_to_disk("../carlaData/sem/id%06d.png" % count, carla.ColorConverter.CityScapesPalette)
+			
+			# self.semantic_image.save_to_disk("semantic/%06d.png" % count)
+			# self.semantic_image.save_to_disk("../carlaData/sem/id%06d.png" % count, carla.ColorConverter.CityScapesPalette)
+			# self.semantic_image.save_to_disk("../carlaData/sem/" + str(count) + ".png", carla.ColorConverter.CityScapesPalette)
 
 			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
 			# self.semantic_image.convert(carla.ColorConverter)
 			i = np.array(self.semantic_image.raw_data)
 
 			i2 = i.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
-			print(i2)
 			i3 = i2[:, :, :3]
-			self.semantic = i2
+			# print(i3)
+			self.semantic = i3
 			cv2.imshow("semantic_image", self.semantic)
 
 	def save(self, count, video_out, file_ptr, ini, time_ptr, time):
@@ -340,13 +349,13 @@ class BasicSynchronousClient(object):
 		time_str = "{:.6f}\n" .format(time)
 		time_ptr.write(time_str)
 
-		if self.image is not None:
-			array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
-			array = np.reshape(array, (self.image.height, self.image.width, 4))
-			array = array[:, :, :3]
-			# array = array[:, :, ::-1]
-			video_out.write(array)
-			# self.image.save_to_disk("../carlaData/image/id%05d.png" % count)
+		# if self.image is not None:
+		# 	array = np.frombuffer(self.image.raw_data, dtype=np.dtype("uint8"))
+		# 	array = np.reshape(array, (self.image.height, self.image.width, 4))
+		# 	array = array[:, :, :3]
+		# 	# array = array[:, :, ::-1]
+		# 	video_out.write(array)
+		# 	# self.image.save_to_disk("../carlaData/image/id%05d.png" % count)
 
 	def depth_save(self, count, video_out):
 		if self.depth_image is not None:
@@ -362,7 +371,7 @@ class BasicSynchronousClient(object):
 			semantic_save = semantic_save.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
 			semantic_save = semantic_save[:,:,2]
 			video_out.write(semantic_save)
-			# self.semantic_image.save_to_disk("../carlaData/semantic/id%05d.png" % count)
+			self.semantic_image.save_to_disk("../carlaData/sem/id%05d.png" % count)
 			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
 			# self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
 
@@ -417,11 +426,11 @@ class BasicSynchronousClient(object):
 			# # Register a callback to get called every time we receive a new snapshot.
 			# self.world.on_tick(lambda world_snapshot: self.saveImages(world_snapshot))
 
-			fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
-			out_camera = cv2.VideoWriter('out_camera_' + FILE_NAME + '.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
+			# fourcc_camera = cv2.VideoWriter_fourcc(*'XVID')
+			# out_camera = cv2.VideoWriter('out_camera_' + FILE_NAME + '.avi', fourcc_camera, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			fourcc_seg = cv2.VideoWriter_fourcc(*'DIVX')
-			out_seg = cv2.VideoWriter('out_seg_' + FILE_NAME + '.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
+			# fourcc_seg = cv2.VideoWriter_fourcc(*'XVID')
+			# out_seg = cv2.VideoWriter('out_seg_' + FILE_NAME + '.avi', fourcc_seg, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT),0)
 
 			#fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
 			#out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
@@ -437,6 +446,9 @@ class BasicSynchronousClient(object):
 
 			begin_t = time.time()
 
+			images = []
+			semantic = []
+
 			while True:
 				self.world.tick()
 				self.capture = True
@@ -446,16 +458,28 @@ class BasicSynchronousClient(object):
 				self.render(self.display, count)
 				#self.depth_render(self.depth_display, count)
 				self.semantic_render(self.semantic_display, count)
+				images.append(self.image)
+				semantic.append(self.semantic_image)
+				
+				# self.image.save_to_disk("image_2/%06d.png" % count)
+				# self.semantic_image.save_to_disk("semantic/%06d.png" % count)
+				
 				curr_t = time.time()
-				self.save(count, out_camera, file_ptr, ini, time_ptr, curr_t-begin_t)
+				self.save(count, None, file_ptr, ini, time_ptr, curr_t-begin_t)
 				#self.depth_save(count, out_depth)
-				self.semantic_save(count, out_seg)
+				# self.semantic_save(count, out_seg)
 				pygame.display.flip()
 				pygame.event.pump()
 				self.log_data()
 				cv2.waitKey(1)
 				if self.control(self.car):
+					i=0
+					for image, label, in zip(images, semantic):
+						image.save_to_disk("image_2/%06d.png" % i)
+						label.save_to_disk("semantic/%06d.png" % i)
+						i+=1
 					return
+
 				count += 1
 
 		#except Exception as e: print(e)
