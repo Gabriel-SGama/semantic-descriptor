@@ -46,9 +46,10 @@ size = (0,0)
 # filename_list = sorted(glob("image/*"))
 # print(sorted(glob("image/*")))
 # print(filename_list)
+DIRECTORY = "carla_seq/11/"
 
-images_path = sorted(glob("image_2/*"))
-labels_path = sorted(glob("semantic/*"))
+images_path = sorted(glob(DIRECTORY+"image_2/*.png"))
+labels_path = sorted(glob(DIRECTORY+"semantic/*.png"))
 
 for imgp, labelp in zip(images_path, labels_path):
 	img = cv2.imread(imgp)
@@ -56,17 +57,18 @@ for imgp, labelp in zip(images_path, labels_path):
 
 	cv2.imshow("frame",img)
 	cv2.imshow("label",label)
-	# color = zeros_like(img)
+	color = zeros_like(img)
 	cv2.imwrite(labelp, label[:,:,2])
 	
 	# print(label)
-	# color[:,:,:] = cityscapes_pallete_float[label[:,:,2]]*255
+	color[:,:,:] = cityscapes_pallete_float[label[:,:,2]]*255
+	color[:,:,:] = color[:,:,::-1]
 	# print(color)
-	# color = color.astype(np.uint8)
+	color = color.astype(np.uint8)
 	# print(color.shape)
 	# color = cv2.cvtColor(color, cv2.COLOR_RGB2RGB)
 	# print(type(color))
-	# cv2.imshow("color",color)
+	cv2.imshow("color",color)
 	cv2.waitKey(1)
  
  

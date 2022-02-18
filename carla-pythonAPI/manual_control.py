@@ -73,7 +73,7 @@ VIEW_WIDTH = 512
 VIEW_HEIGHT = 512
 VIEW_FOV = 90
 FILE_NAME = 'kitti'
-
+DIRECTORY = "carla_seq/11/"
 
 
 
@@ -371,7 +371,7 @@ class BasicSynchronousClient(object):
 			semantic_save = semantic_save.reshape((VIEW_HEIGHT, VIEW_WIDTH, 4))
 			semantic_save = semantic_save[:,:,2]
 			video_out.write(semantic_save)
-			self.semantic_image.save_to_disk("../carlaData/sem/id%05d.png" % count)
+			# self.semantic_image.save_to_disk("../carlaData/sem/id%05d.png" % count)
 			# self.semantic_image.convert(carla.ColorConverter.CityScapesPalette)
 			# self.semantic_image.save_to_disk("../carlaData/semantic/idcolor%05d.png" % count)
 
@@ -403,9 +403,14 @@ class BasicSynchronousClient(object):
 			pygame.init()
 
 			self.client = carla.Client('127.0.0.1', 2000)
-			self.client.set_timeout(2.0)
+			self.client.set_timeout(4.0)
 			self.world = self.client.get_world()
+			#self.world = self.client.load_world('Town11')
+			# self.world.set_weather(carla.WeatherParameters.ClearNoon)
+			# print(self.world.get_weather())
 
+			# print(self.client.get_available_maps())
+			# return
 			self.setup_car()
 			self.setup_camera()
 			#self.setup_depth_camera()
@@ -435,8 +440,8 @@ class BasicSynchronousClient(object):
 			#fourcc_depth = cv2.VideoWriter_fourcc(*'XVID')
 			#out_depth = cv2.VideoWriter('out_depth_kitti.avi', fourcc_depth, 20.0, (VIEW_WIDTH,  VIEW_HEIGHT))
 
-			file_ptr = open('pos_' + FILE_NAME + '.txt', 'w')
-			time_ptr = open('times.txt', 'w')
+			file_ptr = open(DIRECTORY + 'pos_' + FILE_NAME + '.txt', 'w')
+			time_ptr = open(DIRECTORY + 'times.txt', 'w')
 
 			pos = self.car.get_transform()
 			ini_x = pos.location.x
@@ -460,7 +465,10 @@ class BasicSynchronousClient(object):
 				self.semantic_render(self.semantic_display, count)
 				images.append(self.image)
 				semantic.append(self.semantic_image)
-				
+				thread_img = threading.Thread(target = saveImage, args = (self.image, count))
+				thread_label = threading.Thread(target = saveLabel, args = (self.semantic_image, count))
+				thread_img.start()
+				thread_label.start()
 				# self.image.save_to_disk("image_2/%06d.png" % count)
 				# self.semantic_image.save_to_disk("semantic/%06d.png" % count)
 				
@@ -473,11 +481,11 @@ class BasicSynchronousClient(object):
 				self.log_data()
 				cv2.waitKey(1)
 				if self.control(self.car):
-					i=0
-					for image, label, in zip(images, semantic):
-						image.save_to_disk("image_2/%06d.png" % i)
-						label.save_to_disk("semantic/%06d.png" % i)
-						i+=1
+					# i=0
+					# for image, label, in zip(images, semantic):
+					# 	image.save_to_disk("image_2/%06d.png" % i)
+					# 	label.save_to_disk("semantic/%06d.png" % i)
+					# 	i+=1
 					return
 
 				count += 1
@@ -499,6 +507,20 @@ class BasicSynchronousClient(object):
 # -- main() --------------------------------------------------------------------
 # ==============================================================================
 
+
+import threading
+
+def saveImage(image, i):
+    image.save_to_disk(DIRECTORY + "image_2/%06d.png" % i)
+
+def saveLabel(label, i):
+    label.save_to_disk(DIRECTORY + "semantic/%06d.png" % i)
+
+
+
+
+# thread = threading.Thread(target=f)
+# thread.start()
 
 def main():
 	"""
